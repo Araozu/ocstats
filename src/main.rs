@@ -1,6 +1,34 @@
 use std::process::ExitCode;
 
-fn main() -> ExitCode {
+#[tokio::main]
+async fn main() -> ExitCode {
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if let [command] | [command, _] | [command, _, _] = arguments.as_slice()
+        && command == "serve"
+    {
+        let port = match arguments.as_slice() {
+            [_] => 4117,
+            [_, port] => match port.parse() {
+                Ok(port) => port,
+                Err(_) => return usage(),
+            },
+            [_, flag, port] if flag == "--port" => match port.parse() {
+                Ok(port) => port,
+                Err(_) => return usage(),
+            },
+            _ => return usage(),
+        };
+        return match ocstats::serve_default(port).await {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("ocstats: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
+    if !arguments.is_empty() {
+        return usage();
+    }
     match ocstats::extract_default() {
         Ok(data) => {
             let mut store = match ocstats::AnalyticsStore::open_default() {
@@ -27,4 +55,9 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+fn usage() -> ExitCode {
+    eprintln!("usage: ocstats [serve [--port PORT|PORT]]");
+    ExitCode::FAILURE
 }

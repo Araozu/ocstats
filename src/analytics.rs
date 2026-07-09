@@ -5,6 +5,7 @@ use std::{
 };
 
 use rusqlite::{Connection, OptionalExtension, Row, params, types::Value as SqlValue};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     AssistantMessage, CompletedStep, Error, Extraction, Session, Usage, default_analytics_path,
@@ -18,7 +19,7 @@ pub struct AnalyticsStore {
     connection: Connection,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ImportSummary {
     pub sessions: usize,
     pub assistant_messages: usize,
@@ -26,7 +27,7 @@ pub struct ImportSummary {
     pub issues: usize,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionUsage {
     pub source: String,
     pub session_id: String,
@@ -34,7 +35,7 @@ pub struct SessionUsage {
     pub source_kind: String,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UsageFilter {
     pub project_id: Option<String>,
     pub provider_id: Option<String>,
@@ -43,7 +44,22 @@ pub struct UsageFilter {
     pub end_at_ms: Option<i64>,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ProjectSummary {
+    pub source: String,
+    pub id: String,
+    pub name: Option<String>,
+    pub worktree: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ModelSummary {
+    pub provider_id: String,
+    pub model_id: String,
+    pub variant: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PeriodUsage {
     pub source: String,
     pub start_at_ms: i64,
@@ -51,7 +67,7 @@ pub struct PeriodUsage {
     pub usage: Usage,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Reconciliation {
     pub source: String,
     pub session_id: String,
@@ -228,6 +244,42 @@ impl AnalyticsStore {
                     completed_steps: optional_usage_from_row(row, 2, 3)?,
                     assistant_messages: optional_usage_from_row(row, 10, 11)?,
                     session: session_usage_from_row(row, 18)?,
+                })
+            })?
+            .collect::<Result<_, _>>()
+            .map_err(Error::from)
+    }
+
+    pub fn projects(&self) -> Result<Vec<ProjectSummary>, Error> {
+        let mut statement = self.connection.prepare(
+            "SELECT DISTINCT source, project_id, project_name, project_worktree
+             FROM session ORDER BY source, project_name, project_id",
+        )?;
+        statement
+            .query_map([], |row| {
+                Ok(ProjectSummary {
+                    source: row.get(0)?,
+                    id: row.get(1)?,
+                    name: row.get(2)?,
+                    worktree: row.get(3)?,
+                })
+            })?
+            .collect::<Result<_, _>>()
+            .map_err(Error::from)
+    }
+
+    pub fn models(&self) -> Result<Vec<ModelSummary>, Error> {
+        let mut statement = self.connection.prepare(
+            "SELECT DISTINCT provider_id, model_id, variant FROM session
+             WHERE provider_id IS NOT NULL AND model_id IS NOT NULL
+             ORDER BY provider_id, model_id, variant",
+        )?;
+        statement
+            .query_map([], |row| {
+                Ok(ModelSummary {
+                    provider_id: row.get(0)?,
+                    model_id: row.get(1)?,
+                    variant: row.get(2)?,
                 })
             })?
             .collect::<Result<_, _>>()

@@ -1,10 +1,13 @@
 //! Read-only extraction of OpenCode's internal SQLite usage records.
 
 mod analytics;
+mod server;
 
 pub use analytics::{
-    AnalyticsStore, ImportSummary, PeriodUsage, Reconciliation, SessionUsage, UsageFilter,
+    AnalyticsStore, ImportSummary, ModelSummary, PeriodUsage, ProjectSummary, Reconciliation,
+    SessionUsage, UsageFilter,
 };
+pub use server::serve_default;
 
 use std::{
     collections::BTreeSet,
