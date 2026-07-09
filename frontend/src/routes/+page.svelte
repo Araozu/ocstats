@@ -38,7 +38,14 @@
 		cache_write_tokens: number;
 		total_tokens: number | null;
 	};
-	type SessionUsage = { source: string; session_id: string; usage: Usage; source_kind: string };
+	type SessionUsage = {
+		source: string;
+		session_id: string;
+		project_id: string;
+		title: string;
+		usage: Usage;
+		source_kind: string;
+	};
 	type Model = { provider_id: string; model_id: string; variant: string | null };
 	type LoadState = 'loading' | 'ready' | 'error';
 
@@ -56,19 +63,28 @@
 	let projects = $state<Project[]>([]);
 	let sessions = $state<SessionUsage[]>([]);
 	let models = $state<Model[]>([]);
-	let selectedProjectId = $state('all');
+	let selectedProjectKey = $state('all');
+	let selectedSessionId = $state<string | null>(null);
 	let loadState = $state<LoadState>('loading');
 	let errorMessage = $state('');
 	let lastUpdated = $state<Date | null>(null);
 
+	function projectKey(project: Project) {
+		return `${project.source}:${project.id}`;
+	}
+
 	let selectedProject = $derived(
-		projects.find((project) => project.id === selectedProjectId) ?? null
+		projects.find((project) => projectKey(project) === selectedProjectKey) ?? null
 	);
 	let visibleSessions = $derived(
-		selectedProjectId === 'all'
+		selectedProjectKey === 'all'
 			? sessions
-			: sessions.filter((session) => session.source === selectedProject?.source)
+			: sessions.filter(
+					(session) =>
+						session.project_id === selectedProject?.id && session.source === selectedProject?.source
+				)
 	);
+	let projectSessions = $derived(selectedProject ? visibleSessions : []);
 	let totals = $derived(
 		visibleSessions.reduce((total, session) => addUsage(total, session.usage), emptyUsage)
 	);
@@ -168,22 +184,28 @@
 				<ScrollArea class="h-auto max-h-64 md:max-h-[calc(100vh-8rem)]">
 					<div class="space-y-0.5">
 						<button
-							class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-sidebar-accent {selectedProjectId ===
+							class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-sidebar-accent {selectedProjectKey ===
 							'all'
 								? 'bg-sidebar-accent font-medium'
 								: 'text-muted-foreground'}"
-							onclick={() => (selectedProjectId = 'all')}
+							onclick={() => {
+								selectedProjectKey = 'all';
+								selectedSessionId = null;
+							}}
 						>
 							<Database size={15} />
 							<span class="truncate">All projects</span>
 						</button>
 						{#each projects as project (project.source + project.id)}
 							<button
-								class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-sidebar-accent {selectedProjectId ===
-								project.id
+								class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs transition-colors hover:bg-sidebar-accent {selectedProjectKey ===
+								projectKey(project)
 									? 'bg-sidebar-accent font-medium'
 									: 'text-muted-foreground'}"
-								onclick={() => (selectedProjectId = project.id)}
+								onclick={() => {
+									selectedProjectKey = projectKey(project);
+									selectedSessionId = null;
+								}}
 							>
 								<FolderSimple size={15} />
 								<span class="truncate">{projectLabel(project)}</span>
@@ -203,6 +225,46 @@
 				<p class="text-[11px] font-medium text-muted-foreground">LOCAL INSTANCE</p>
 				<p class="mt-1 text-xs text-muted-foreground">127.0.0.1:4117</p>
 			</div>
+		</aside>
+
+		<aside class="w-full shrink-0 border-b bg-background md:min-h-screen md:w-72 md:border-r md:border-b-0">
+			<div class="flex h-14 items-center justify-between border-b px-4">
+				<div>
+					<p class="text-xs font-medium uppercase tracking-wider text-muted-foreground">Sessions</p>
+					<p class="mt-0.5 text-[11px] text-muted-foreground">
+						{selectedProject ? `${projectSessions.length} in project` : 'Select a project'}
+					</p>
+				</div>
+				{#if selectedProject}<Badge variant="secondary">{projectSessions.length}</Badge>{/if}
+			</div>
+			<ScrollArea class="h-auto max-h-80 p-3 md:max-h-[calc(100vh-3.5rem)]">
+				{#if !selectedProject}
+					<p class="px-2 py-3 text-xs text-muted-foreground">Choose a project to view its sessions.</p>
+				{:else if loadState === 'loading'}
+					<div class="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground">
+						<CircleNotch class="animate-spin" size={14} /> Loading sessions
+					</div>
+				{:else if projectSessions.length === 0}
+					<p class="px-2 py-3 text-xs text-muted-foreground">No sessions in this project.</p>
+				{:else}
+					<div class="space-y-0.5">
+						{#each projectSessions as session (session.source + session.session_id)}
+							<button
+								class="w-full rounded-md px-2 py-2 text-left transition-colors hover:bg-sidebar-accent {selectedSessionId ===
+								session.session_id
+									? 'bg-sidebar-accent'
+									: ''}"
+								onclick={() => (selectedSessionId = session.session_id)}
+							>
+								<p class="truncate text-xs font-medium">{session.title || shortId(session.session_id)}</p>
+								<p class="mt-1 truncate font-mono text-[10px] text-muted-foreground">
+									{shortId(session.session_id)}
+								</p>
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</ScrollArea>
 		</aside>
 
 		<main class="min-w-0 flex-1">

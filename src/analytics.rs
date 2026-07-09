@@ -31,6 +31,8 @@ pub struct ImportSummary {
 pub struct SessionUsage {
     pub source: String,
     pub session_id: String,
+    pub project_id: String,
+    pub title: String,
     pub usage: Usage,
     pub source_kind: String,
 }
@@ -162,8 +164,8 @@ impl AnalyticsStore {
     pub fn session_usage_filtered(&self, filter: &UsageFilter) -> Result<Vec<SessionUsage>, Error> {
         let (where_clause, values) = usage_filter(filter);
         let mut statement = self.connection.prepare(&format!(
-            "SELECT su.source, su.session_id, su.cost, su.input_tokens, su.output_tokens, su.reasoning_tokens,
-                    su.cache_read_tokens, su.cache_write_tokens, su.total_tokens, su.source_kind
+            "SELECT su.source, su.session_id, s.project_id, s.title, su.cost, su.input_tokens, su.output_tokens,
+                    su.reasoning_tokens, su.cache_read_tokens, su.cache_write_tokens, su.total_tokens, su.source_kind
              FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
              {where_clause} ORDER BY su.source, su.session_id"
         ))?;
@@ -172,8 +174,10 @@ impl AnalyticsStore {
                 Ok(SessionUsage {
                     source: row.get(0)?,
                     session_id: row.get(1)?,
-                    usage: usage_from_row(row, 2)?,
-                    source_kind: row.get(9)?,
+                    project_id: row.get(2)?,
+                    title: row.get(3)?,
+                    usage: usage_from_row(row, 4)?,
+                    source_kind: row.get(11)?,
                 })
             })?
             .collect::<Result<_, _>>()
@@ -693,12 +697,16 @@ mod tests {
                 SessionUsage {
                     source: source.to_string_lossy().into_owned(),
                     session_id: "session-message".into(),
+                    project_id: "project-1".into(),
+                    title: "session-message".into(),
                     usage: usage(2.0, 20),
                     source_kind: "messages".into(),
                 },
                 SessionUsage {
                     source: source.to_string_lossy().into_owned(),
                     session_id: "session-steps".into(),
+                    project_id: "project-1".into(),
+                    title: "session-steps".into(),
                     usage: usage(4.0, 40),
                     source_kind: "steps".into(),
                 },

@@ -51,7 +51,10 @@ impl IntoResponse for ApiError {
 }
 
 pub async fn serve_default(port: u16) -> Result<(), Error> {
-    let store = Arc::new(Mutex::new(AnalyticsStore::open_default()?));
+    let extraction = extract_default()?;
+    let mut analytics_store = AnalyticsStore::open_default()?;
+    analytics_store.import(&extraction)?;
+    let store = Arc::new(Mutex::new(analytics_store));
     let address = SocketAddr::from(([127, 0, 0, 1], port));
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, router(store)).await?;
