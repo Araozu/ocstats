@@ -7,11 +7,16 @@
 	import FolderSimple from 'phosphor-svelte/lib/FolderSimpleIcon';
 	import Hash from 'phosphor-svelte/lib/HashIcon';
 	import Lightning from 'phosphor-svelte/lib/LightningIcon';
+	import Monitor from 'phosphor-svelte/lib/MonitorIcon';
+	import Moon from 'phosphor-svelte/lib/MoonIcon';
+	import Sun from 'phosphor-svelte/lib/SunIcon';
 	import TrendUp from 'phosphor-svelte/lib/TrendUpIcon';
 	import WarningCircle from 'phosphor-svelte/lib/WarningCircleIcon';
+	import { resetMode, setMode } from 'mode-watcher';
 	import { Badge } from '$lib/components/ui/badge';
-	import { Button } from '$lib/components/ui/button';
+	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { ScrollArea } from '$lib/components/ui/scroll-area';
 	import { Separator } from '$lib/components/ui/separator';
 	import {
@@ -225,6 +230,27 @@
 					>
 						<ArrowsClockwise class={loadState === 'loading' ? 'animate-spin' : ''} /> Refresh
 					</Button>
+					<DropdownMenu.Root>
+						<DropdownMenu.Trigger
+							class={buttonVariants({ variant: 'outline', size: 'icon' })}
+							aria-label="Change color theme"
+						>
+							<Sun class="dark:hidden" />
+							<Moon class="hidden dark:block" />
+							<span class="sr-only">Change color theme</span>
+						</DropdownMenu.Trigger>
+						<DropdownMenu.Content align="end">
+							<DropdownMenu.Item onclick={() => setMode('light')}>
+								<Sun /> Light
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => setMode('dark')}>
+								<Moon /> Dark
+							</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={resetMode}>
+								<Monitor /> System
+							</DropdownMenu.Item>
+						</DropdownMenu.Content>
+					</DropdownMenu.Root>
 				</div>
 			</header>
 
