@@ -1,5 +1,9 @@
 //! Read-only extraction of OpenCode's internal SQLite usage records.
 
+mod analytics;
+
+pub use analytics::{AnalyticsStore, ImportSummary, SessionUsage};
+
 use std::{
     collections::BTreeSet,
     env,
@@ -58,6 +62,10 @@ pub enum Error {
     Sqlite(#[from] rusqlite::Error),
     #[error("incompatible OpenCode database schema: missing {0}")]
     IncompatibleSchema(String),
+    #[error("filesystem error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("token count exceeds SQLite's signed integer range: {0}")]
+    TokenCount(u64),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -154,6 +162,15 @@ pub fn default_database_path() -> Result<PathBuf, Error> {
         }
         None => Ok(data_dir.join("opencode.db")),
     }
+}
+
+/// Resolve the application-owned database used for incremental analytics imports.
+pub fn default_analytics_path() -> Result<PathBuf, Error> {
+    let data_dir = env::var_os("XDG_DATA_HOME")
+        .map(PathBuf::from)
+        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
+        .ok_or_else(|| Error::DataPath("set HOME or XDG_DATA_HOME".into()))?;
+    Ok(data_dir.join("ocstats").join("analytics.db"))
 }
 
 pub fn extract_default() -> Result<Extraction, Error> {
