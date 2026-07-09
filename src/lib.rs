@@ -2,7 +2,9 @@
 
 mod analytics;
 
-pub use analytics::{AnalyticsStore, ImportSummary, SessionUsage};
+pub use analytics::{
+    AnalyticsStore, ImportSummary, PeriodUsage, Reconciliation, SessionUsage, UsageFilter,
+};
 
 use std::{
     collections::BTreeSet,
@@ -66,6 +68,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("token count exceeds SQLite's signed integer range: {0}")]
     TokenCount(u64),
+    #[error("aggregation period must be greater than zero")]
+    InvalidPeriod,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

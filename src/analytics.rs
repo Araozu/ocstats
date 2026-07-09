@@ -4,7 +4,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, Row, params, types::Value as SqlValue};
 
 use crate::{
     AssistantMessage, CompletedStep, Error, Extraction, Session, Usage, default_analytics_path,
@@ -32,6 +32,48 @@ pub struct SessionUsage {
     pub session_id: String,
     pub usage: Usage,
     pub source_kind: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct UsageFilter {
+    pub project_id: Option<String>,
+    pub provider_id: Option<String>,
+    pub model_id: Option<String>,
+    pub start_at_ms: Option<i64>,
+    pub end_at_ms: Option<i64>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct PeriodUsage {
+    pub source: String,
+    pub start_at_ms: i64,
+    pub sessions: u64,
+    pub usage: Usage,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct Reconciliation {
+    pub source: String,
+    pub session_id: String,
+    pub completed_steps: Option<Usage>,
+    pub assistant_messages: Option<Usage>,
+    pub session: Usage,
+}
+
+impl Reconciliation {
+    pub fn has_mismatch(&self) -> bool {
+        self.completed_steps
+            .as_ref()
+            .is_some_and(|usage| !usage_matches(usage, &self.session))
+            || self
+                .assistant_messages
+                .as_ref()
+                .is_some_and(|usage| !usage_matches(usage, &self.session))
+            || matches!(
+                (&self.completed_steps, &self.assistant_messages),
+                (Some(steps), Some(messages)) if !usage_matches(steps, messages)
+            )
+    }
 }
 
 impl AnalyticsStore {
@@ -98,26 +140,94 @@ impl AnalyticsStore {
     }
 
     pub fn session_usage(&self) -> Result<Vec<SessionUsage>, Error> {
-        let mut statement = self.connection.prepare(
-            "SELECT source, session_id, cost, input_tokens, output_tokens, reasoning_tokens,
-                    cache_read_tokens, cache_write_tokens, total_tokens, source_kind
-             FROM session_usage ORDER BY source, session_id",
-        )?;
+        self.session_usage_filtered(&UsageFilter::default())
+    }
+
+    pub fn session_usage_filtered(&self, filter: &UsageFilter) -> Result<Vec<SessionUsage>, Error> {
+        let (where_clause, values) = usage_filter(filter);
+        let mut statement = self.connection.prepare(&format!(
+            "SELECT su.source, su.session_id, su.cost, su.input_tokens, su.output_tokens, su.reasoning_tokens,
+                    su.cache_read_tokens, su.cache_write_tokens, su.total_tokens, su.source_kind
+             FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
+             {where_clause} ORDER BY su.source, su.session_id"
+        ))?;
         statement
-            .query_map([], |row| {
+            .query_map(rusqlite::params_from_iter(values), |row| {
                 Ok(SessionUsage {
                     source: row.get(0)?,
                     session_id: row.get(1)?,
-                    usage: Usage {
-                        cost: row.get(2)?,
-                        input_tokens: row.get::<_, i64>(3)? as u64,
-                        output_tokens: row.get::<_, i64>(4)? as u64,
-                        reasoning_tokens: row.get::<_, i64>(5)? as u64,
-                        cache_read_tokens: row.get::<_, i64>(6)? as u64,
-                        cache_write_tokens: row.get::<_, i64>(7)? as u64,
-                        total_tokens: row.get::<_, Option<i64>>(8)?.map(|value| value as u64),
-                    },
+                    usage: usage_from_row(row, 2)?,
                     source_kind: row.get(9)?,
+                })
+            })?
+            .collect::<Result<_, _>>()
+            .map_err(Error::from)
+    }
+
+    pub fn period_usage(
+        &self,
+        filter: &UsageFilter,
+        period_ms: i64,
+    ) -> Result<Vec<PeriodUsage>, Error> {
+        if period_ms <= 0 {
+            return Err(Error::InvalidPeriod);
+        }
+        let (where_clause, mut values) = usage_filter(filter);
+        values.insert(0, SqlValue::Integer(period_ms));
+        let mut statement = self.connection.prepare(&format!(
+            "SELECT su.source, (s.created_at_ms / ?1) * ?1 AS start_at_ms, COUNT(*) AS sessions,
+                    SUM(su.cost), SUM(su.input_tokens), SUM(su.output_tokens), SUM(su.reasoning_tokens),
+                    SUM(su.cache_read_tokens), SUM(su.cache_write_tokens), SUM(su.total_tokens)
+             FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
+             {where_clause} GROUP BY su.source, start_at_ms ORDER BY su.source, start_at_ms"
+        ))?;
+        statement
+            .query_map(rusqlite::params_from_iter(values), |row| {
+                Ok(PeriodUsage {
+                    source: row.get(0)?,
+                    start_at_ms: row.get(1)?,
+                    sessions: row.get::<_, i64>(2)? as u64,
+                    usage: usage_from_row(row, 3)?,
+                })
+            })?
+            .collect::<Result<_, _>>()
+            .map_err(Error::from)
+    }
+
+    pub fn reconcile(&self, filter: &UsageFilter) -> Result<Vec<Reconciliation>, Error> {
+        let (where_clause, values) = usage_filter(filter);
+        let mut statement = self.connection.prepare(&format!(
+            "WITH step_totals AS (
+               SELECT source, session_id, COUNT(*) AS records, SUM(cost) AS cost,
+                 SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens,
+                 SUM(reasoning_tokens) AS reasoning_tokens, SUM(cache_read_tokens) AS cache_read_tokens,
+                 SUM(cache_write_tokens) AS cache_write_tokens, SUM(total_tokens) AS total_tokens
+               FROM completed_step GROUP BY source, session_id
+             ), message_totals AS (
+               SELECT source, session_id, COUNT(*) AS records, SUM(cost) AS cost,
+                 SUM(input_tokens) AS input_tokens, SUM(output_tokens) AS output_tokens,
+                 SUM(reasoning_tokens) AS reasoning_tokens, SUM(cache_read_tokens) AS cache_read_tokens,
+                 SUM(cache_write_tokens) AS cache_write_tokens, SUM(total_tokens) AS total_tokens
+               FROM assistant_message GROUP BY source, session_id
+             )
+             SELECT s.source, s.id, st.records, st.cost, st.input_tokens, st.output_tokens,
+                    st.reasoning_tokens, st.cache_read_tokens, st.cache_write_tokens, st.total_tokens,
+                    mt.records, mt.cost, mt.input_tokens, mt.output_tokens, mt.reasoning_tokens,
+                    mt.cache_read_tokens, mt.cache_write_tokens, mt.total_tokens,
+                    s.cost, s.input_tokens, s.output_tokens, s.reasoning_tokens,
+                    s.cache_read_tokens, s.cache_write_tokens
+             FROM session s LEFT JOIN step_totals st ON st.source = s.source AND st.session_id = s.id
+             LEFT JOIN message_totals mt ON mt.source = s.source AND mt.session_id = s.id
+             {where_clause} ORDER BY s.source, s.id"
+        ))?;
+        statement
+            .query_map(rusqlite::params_from_iter(values), |row| {
+                Ok(Reconciliation {
+                    source: row.get(0)?,
+                    session_id: row.get(1)?,
+                    completed_steps: optional_usage_from_row(row, 2, 3)?,
+                    assistant_messages: optional_usage_from_row(row, 10, 11)?,
+                    session: session_usage_from_row(row, 18)?,
                 })
             })?
             .collect::<Result<_, _>>()
@@ -202,6 +312,86 @@ impl AnalyticsStore {
         )?;
         Ok(())
     }
+}
+
+fn usage_filter(filter: &UsageFilter) -> (String, Vec<SqlValue>) {
+    let mut conditions = Vec::new();
+    let mut values = Vec::new();
+    if let Some(project_id) = &filter.project_id {
+        conditions.push("s.project_id = ?".to_owned());
+        values.push(SqlValue::Text(project_id.clone()));
+    }
+    if let Some(provider_id) = &filter.provider_id {
+        conditions.push("s.provider_id = ?".to_owned());
+        values.push(SqlValue::Text(provider_id.clone()));
+    }
+    if let Some(model_id) = &filter.model_id {
+        conditions.push("s.model_id = ?".to_owned());
+        values.push(SqlValue::Text(model_id.clone()));
+    }
+    if let Some(start_at_ms) = filter.start_at_ms {
+        conditions.push("s.created_at_ms >= ?".to_owned());
+        values.push(SqlValue::Integer(start_at_ms));
+    }
+    if let Some(end_at_ms) = filter.end_at_ms {
+        conditions.push("s.created_at_ms < ?".to_owned());
+        values.push(SqlValue::Integer(end_at_ms));
+    }
+    let where_clause = if conditions.is_empty() {
+        String::new()
+    } else {
+        format!("WHERE {}", conditions.join(" AND "))
+    };
+    (where_clause, values)
+}
+
+fn usage_from_row(row: &Row<'_>, offset: usize) -> rusqlite::Result<Usage> {
+    Ok(Usage {
+        cost: row.get(offset)?,
+        input_tokens: row.get::<_, i64>(offset + 1)? as u64,
+        output_tokens: row.get::<_, i64>(offset + 2)? as u64,
+        reasoning_tokens: row.get::<_, i64>(offset + 3)? as u64,
+        cache_read_tokens: row.get::<_, i64>(offset + 4)? as u64,
+        cache_write_tokens: row.get::<_, i64>(offset + 5)? as u64,
+        total_tokens: row
+            .get::<_, Option<i64>>(offset + 6)?
+            .map(|value| value as u64),
+    })
+}
+
+fn optional_usage_from_row(
+    row: &Row<'_>,
+    count_offset: usize,
+    usage_offset: usize,
+) -> rusqlite::Result<Option<Usage>> {
+    match row.get::<_, Option<i64>>(count_offset)? {
+        Some(_) => usage_from_row(row, usage_offset).map(Some),
+        None => Ok(None),
+    }
+}
+
+fn session_usage_from_row(row: &Row<'_>, offset: usize) -> rusqlite::Result<Usage> {
+    Ok(Usage {
+        cost: row.get(offset)?,
+        input_tokens: row.get::<_, i64>(offset + 1)? as u64,
+        output_tokens: row.get::<_, i64>(offset + 2)? as u64,
+        reasoning_tokens: row.get::<_, i64>(offset + 3)? as u64,
+        cache_read_tokens: row.get::<_, i64>(offset + 4)? as u64,
+        cache_write_tokens: row.get::<_, i64>(offset + 5)? as u64,
+        total_tokens: None,
+    })
+}
+
+fn usage_matches(left: &Usage, right: &Usage) -> bool {
+    (left.cost.is_none() || right.cost.is_none() || left.cost == right.cost)
+        && left.input_tokens == right.input_tokens
+        && left.output_tokens == right.output_tokens
+        && left.reasoning_tokens == right.reasoning_tokens
+        && left.cache_read_tokens == right.cache_read_tokens
+        && left.cache_write_tokens == right.cache_write_tokens
+        && (left.total_tokens.is_none()
+            || right.total_tokens.is_none()
+            || left.total_tokens == right.total_tokens)
 }
 
 fn upsert_session(connection: &Connection, source: &str, session: &Session) -> Result<(), Error> {
@@ -380,7 +570,11 @@ mod tests {
                 worktree: "/work/ocstats".into(),
             },
             title: id.into(),
-            model: None,
+            model: Some(Model {
+                provider_id: "openai".into(),
+                model_id: "gpt-5".into(),
+                variant: None,
+            }),
             usage: usage(99.0, 99),
             created_at_ms: 1,
             updated_at_ms: 2,
@@ -457,6 +651,48 @@ mod tests {
                     source_kind: "steps".into(),
                 },
             ]
+        );
+
+        let filter = UsageFilter {
+            project_id: Some("project-1".into()),
+            provider_id: Some("openai".into()),
+            model_id: Some("gpt-5".into()),
+            start_at_ms: Some(0),
+            end_at_ms: Some(10),
+        };
+        assert_eq!(store.session_usage_filtered(&filter).unwrap().len(), 2);
+        assert_eq!(
+            store.period_usage(&filter, 10).unwrap(),
+            vec![PeriodUsage {
+                source: source.to_string_lossy().into_owned(),
+                start_at_ms: 0,
+                sessions: 2,
+                usage: Usage {
+                    cost: Some(6.0),
+                    input_tokens: 60,
+                    output_tokens: 6,
+                    reasoning_tokens: 2,
+                    cache_read_tokens: 4,
+                    cache_write_tokens: 2,
+                    total_tokens: Some(74),
+                },
+            }]
+        );
+        assert!(matches!(
+            store.period_usage(&filter, 0),
+            Err(Error::InvalidPeriod)
+        ));
+
+        let reconciliations = store.reconcile(&filter).unwrap();
+        assert_eq!(reconciliations.len(), 2);
+        assert!(reconciliations.iter().all(Reconciliation::has_mismatch));
+        assert_eq!(
+            reconciliations[1]
+                .completed_steps
+                .as_ref()
+                .unwrap()
+                .input_tokens,
+            40
         );
     }
 }
