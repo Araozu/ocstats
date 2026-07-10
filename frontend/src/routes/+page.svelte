@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
-	import type { SessionUsage } from '$lib/api/ocstats';
+	import type { ModelPricing, SessionUsage } from '$lib/api/ocstats';
 	import DashboardHeader from '$lib/components/dashboard/dashboard-header.svelte';
 	import {
 		addUsage,
@@ -27,7 +27,10 @@
 	const projects = $derived(projectsQuery.data ?? []);
 	const sessions = $derived(sessionsQuery.data ?? []);
 	const models = $derived(modelsQuery.data ?? []);
-	const pricing = $derived(pricingQuery.data?.models ?? []);
+	let pricing = $state<ModelPricing[]>([]);
+	$effect(() => {
+		pricing = pricingQuery.data?.models ?? [];
+	});
 	const selectedProjectKey = $derived(page.url.searchParams.get('project') ?? 'all');
 	const selectedSession = $derived.by(() => {
 		const source = page.url.searchParams.get('source');
