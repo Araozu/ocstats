@@ -19,7 +19,9 @@
 	} = $props();
 </script>
 
-<aside class="border-b bg-background lg:h-screen lg:border-r lg:border-b-0">
+<aside
+	class="border-b bg-background lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-hidden lg:border-r lg:border-b-0"
+>
 	<div class="flex h-16 items-center justify-between border-b px-4">
 		<div>
 			<p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">

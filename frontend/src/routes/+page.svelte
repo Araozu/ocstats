@@ -3,7 +3,6 @@
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import type { ModelPricing, SessionUsage } from '$lib/api/ocstats';
-	import DashboardHeader from '$lib/components/dashboard/dashboard-header.svelte';
 	import {
 		addUsage,
 		emptyUsage,
@@ -114,7 +113,14 @@
 
 <div class="min-h-screen bg-background text-foreground">
 	<div class="grid min-h-screen lg:grid-cols-[16rem_19rem_minmax(0,1fr)]">
-		<ProjectSidebar {projects} {selectedProjectKey} onSelect={selectProject} />
+		<ProjectSidebar
+			{projects}
+			{selectedProjectKey}
+			{lastUpdated}
+			{isRefreshing}
+			onRefresh={refreshDashboard}
+			onSelect={selectProject}
+		/>
 		<SessionSidebar
 			sessions={visibleSessions}
 			{projectName}
@@ -125,13 +131,6 @@
 			onSelect={selectSession}
 		/>
 		<main class="min-w-0">
-			<DashboardHeader
-				title={selectedSession?.title || projectName}
-				isSession={Boolean(selectedSession)}
-				{lastUpdated}
-				{isRefreshing}
-				onRefresh={refreshDashboard}
-			/>
 			<div class="mx-auto max-w-7xl space-y-7 p-5 md:p-8">
 				{#if error}
 					<div
