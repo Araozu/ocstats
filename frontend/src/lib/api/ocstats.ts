@@ -18,6 +18,7 @@ export type SessionUsage = {
 	project_id: string;
 	title: string;
 	usage: Usage;
+	models: ModelUsage[];
 	source_kind: string;
 };
 
@@ -43,7 +44,9 @@ async function get<T>(path: string): Promise<T> {
 export const getProjects = () => get<Project[]>('/projects');
 export const getSessions = () => get<SessionUsage[]>('/usage/sessions');
 export const getModelUsage = (projectId?: string) =>
-	get<ModelUsage[]>(`/usage/models${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`);
+	get<ModelUsage[]>(
+		`/usage/models${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`
+	);
 export const getModels = () => get<Model[]>('/models');
 export const getPricing = () => get<PricingCatalog>('/pricing');
 

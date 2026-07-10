@@ -40,11 +40,12 @@ export function formatNumber(value: number | null | undefined) {
 }
 
 export function formatCost(value: number | null | undefined) {
+	if (value == null) return '—';
 	return new Intl.NumberFormat('en-US', {
 		style: 'currency',
 		currency: 'USD',
 		maximumFractionDigits: 2
-	}).format(value ?? 0);
+	}).format(value);
 }
 
 export function formatPrice(value: number | null | undefined) {

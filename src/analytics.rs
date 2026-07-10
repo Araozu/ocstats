@@ -34,6 +34,7 @@ pub struct SessionUsage {
     pub project_id: String,
     pub title: String,
     pub usage: Usage,
+    pub models: Vec<ModelUsage>,
     pub source_kind: String,
 }
 
@@ -188,15 +189,48 @@ impl AnalyticsStore {
              FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
              {where_clause} ORDER BY su.source, su.session_id"
         ))?;
-        statement
+        let sessions = statement
             .query_map(rusqlite::params_from_iter(values), |row| {
+                let source: String = row.get(0)?;
+                let session_id: String = row.get(1)?;
                 Ok(SessionUsage {
-                    source: row.get(0)?,
-                    session_id: row.get(1)?,
+                    source,
+                    session_id,
                     project_id: row.get(2)?,
                     title: row.get(3)?,
                     usage: usage_from_row(row, 4)?,
+                    models: Vec::new(),
                     source_kind: row.get(11)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        sessions
+            .into_iter()
+            .map(|mut session| {
+                session.models = self.session_models(&session.source, &session.session_id)?;
+                Ok(session)
+            })
+            .collect()
+    }
+
+    fn session_models(&self, source: &str, session_id: &str) -> Result<Vec<ModelUsage>, Error> {
+        let mut statement = self.connection.prepare(
+            "SELECT provider_id, model_id, variant, SUM(cost), SUM(input_tokens),
+                    SUM(output_tokens), SUM(reasoning_tokens), SUM(cache_read_tokens),
+                    SUM(cache_write_tokens), SUM(total_tokens)
+             FROM assistant_message
+             WHERE source = ?1 AND session_id = ?2
+             GROUP BY provider_id, model_id, variant
+             ORDER BY provider_id, model_id, variant",
+        )?;
+        statement
+            .query_map(params![source, session_id], |row| {
+                Ok(ModelUsage {
+                    provider_id: row.get(0)?,
+                    model_id: row.get(1)?,
+                    variant: row.get(2)?,
+                    usage: usage_from_row(row, 3)?,
                 })
             })?
             .collect::<Result<_, _>>()
@@ -800,6 +834,12 @@ mod tests {
                     project_id: "project-1".into(),
                     title: "session-message".into(),
                     usage: usage(2.0, 20),
+                    models: vec![ModelUsage {
+                        provider_id: "openai".into(),
+                        model_id: "gpt-5".into(),
+                        variant: None,
+                        usage: usage(2.0, 20),
+                    }],
                     source_kind: "messages".into(),
                 },
                 SessionUsage {
@@ -808,6 +848,12 @@ mod tests {
                     project_id: "project-1".into(),
                     title: "session-steps".into(),
                     usage: usage(4.0, 40),
+                    models: vec![ModelUsage {
+                        provider_id: "openai".into(),
+                        model_id: "gpt-5".into(),
+                        variant: None,
+                        usage: usage(1.0, 10),
+                    }],
                     source_kind: "steps".into(),
                 },
             ]

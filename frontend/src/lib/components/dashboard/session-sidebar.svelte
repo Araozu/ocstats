@@ -2,6 +2,7 @@
 	import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
 	import type { SessionUsage } from '$lib/api/ocstats';
 	import { Badge } from '$lib/components/ui/badge';
+	import { getModelPricingContext } from '$lib/model-pricing';
 	import { formatCost, sessionKey, shortId } from './format';
 
 	let {
@@ -19,6 +20,29 @@
 		onOverview: () => void;
 		onSelect: (session: SessionUsage) => void;
 	} = $props();
+	const pricingStore = getModelPricingContext();
+
+	const pricedSessions = $derived(
+		sessions.map((session) => {
+			let cost = 0;
+			let hasPrice = session.models.length > 0;
+
+			for (const model of session.models) {
+				for (const [tokens, rate] of [
+					[model.usage.input_tokens, 'input'],
+					[model.usage.cache_read_tokens, 'cached_read'],
+					[model.usage.output_tokens, 'output']
+				] as const) {
+					if (tokens === 0) continue;
+					const modelCost = $pricingStore.cost(model, tokens, rate);
+					if (modelCost == null) hasPrice = false;
+					else cost += modelCost;
+				}
+			}
+
+			return { session, cost: hasPrice ? cost : null };
+		})
+	);
 </script>
 
 <aside
@@ -46,7 +70,7 @@
 	</div>
 	<div class="max-h-72 min-h-0 overflow-y-auto p-3 lg:flex-1 lg:max-h-none">
 		<div class="space-y-1">
-			{#each sessions as session (sessionKey(session.source, session.session_id))}<button
+			{#each pricedSessions as { session, cost } (sessionKey(session.source, session.session_id))}<button
 					class="w-full rounded-md border border-transparent px-2.5 py-2.5 text-left transition-colors hover:bg-muted {selectedSessionKey ===
 					sessionKey(session.source, session.session_id)
 						? 'border-border bg-muted'
@@ -57,7 +81,7 @@
 						class="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"
 					>
 						<span class="truncate font-mono">{shortId(session.session_id)}</span><span
-							class="shrink-0">{formatCost(session.usage.cost)}</span
+							class="shrink-0">{formatCost(cost)}</span
 						>
 					</div></button
 				>{:else}{#if isLoading}<div
