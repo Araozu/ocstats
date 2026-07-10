@@ -4,10 +4,10 @@
 	import HashIcon from 'phosphor-svelte/lib/HashIcon';
 	import LightningIcon from 'phosphor-svelte/lib/LightningIcon';
 	import TrendUpIcon from 'phosphor-svelte/lib/TrendUpIcon';
-	import type { SessionUsage, Usage } from '$lib/api/ocstats';
+	import type { ModelPricing, ModelUsage, SessionUsage, Usage } from '$lib/api/ocstats';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { Separator } from '$lib/components/ui/separator';
+	import ModelUsageCard from './model-usage-card.svelte';
 	import {
 		Table,
 		TableBody,
@@ -23,6 +23,8 @@
 		sessions,
 		modelCount,
 		totals,
+		modelUsage,
+		pricing,
 		isLoading = false,
 		onSessionSelect
 	}: {
@@ -30,11 +32,13 @@
 		sessions: SessionUsage[];
 		modelCount: number;
 		totals: Usage;
+		modelUsage: ModelUsage[];
+		pricing: ModelPricing[];
 		isLoading?: boolean;
 		onSessionSelect: (session: SessionUsage) => void;
 	} = $props();
 	const billedTokens = $derived(
-		totals.input_tokens + totals.output_tokens + totals.reasoning_tokens
+		totals.input_tokens + totals.cache_read_tokens + totals.output_tokens
 	);
 	const percent = (value: number) =>
 		billedTokens ? Math.min(100, (value / billedTokens) * 100) : 0;
@@ -114,7 +118,7 @@
 				><CardTitle>Token mix</CardTitle>
 				<p class="mt-1 text-xs text-muted-foreground">Billable usage composition.</p></CardHeader
 			><CardContent class="space-y-5"
-				>{#each [{ label: 'Input', value: totals.input_tokens, color: 'bg-foreground' }, { label: 'Output', value: totals.output_tokens, color: 'bg-muted-foreground' }, { label: 'Reasoning', value: totals.reasoning_tokens, color: 'bg-primary' }] as item (item.label)}<div
+				>{#each [{ label: 'Input tokens', value: totals.input_tokens, color: 'bg-foreground' }, { label: 'Cached tokens', value: totals.cache_read_tokens, color: 'bg-primary' }, { label: 'Output tokens', value: totals.output_tokens, color: 'bg-muted-foreground' }] as item (item.label)}<div
 					>
 						<div class="mb-2 flex justify-between text-xs">
 							<span>{item.label}</span><span class="text-muted-foreground"
@@ -127,20 +131,14 @@
 								style={`width: ${percent(item.value)}%`}
 							></div>
 						</div>
-					</div>{/each}<Separator />
-				<div class="space-y-3 text-xs">
-					<div class="flex justify-between">
-						<span class="text-muted-foreground">Cache read</span><span class="font-medium"
-							>{formatNumber(totals.cache_read_tokens)}</span
-						>
-					</div>
-					<div class="flex justify-between">
-						<span class="text-muted-foreground">Cache write</span><span class="font-medium"
-							>{formatNumber(totals.cache_write_tokens)}</span
-						>
-					</div>
-				</div></CardContent
+					</div>{/each}</CardContent
 			></Card
 		>
 	</section>
+	<ModelUsageCard
+		models={modelUsage}
+		{pricing}
+		title="Model usage"
+		description="Usage and catalog prices for this selection"
+	/>
 </div>

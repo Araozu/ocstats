@@ -1,0 +1,4 @@
+GET http://127.0.0.1:4117/api/pricing
+
+{"models":[{"provider":"openai","slug":"gpt-5.5","input":5.0,"cached_write":null,"cached_read":0.5,"output":30.0},{"provider":"openai","slug":"gpt-5.5-pro","input":30.0,"cached_write":null,"cached_read":null,"output":180.0}]}
+

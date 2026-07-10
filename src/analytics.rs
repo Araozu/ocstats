@@ -203,6 +203,29 @@ impl AnalyticsStore {
             .map_err(Error::from)
     }
 
+    pub fn model_usage_filtered(&self, filter: &UsageFilter) -> Result<Vec<ModelUsage>, Error> {
+        let (where_clause, values) = usage_filter(filter);
+        let mut statement = self.connection.prepare(&format!(
+            "SELECT am.provider_id, am.model_id, am.variant, SUM(am.cost), SUM(am.input_tokens),
+                    SUM(am.output_tokens), SUM(am.reasoning_tokens), SUM(am.cache_read_tokens),
+                    SUM(am.cache_write_tokens), SUM(am.total_tokens)
+             FROM assistant_message am JOIN session s ON s.source = am.source AND s.id = am.session_id
+             {where_clause} GROUP BY am.provider_id, am.model_id, am.variant
+             ORDER BY am.provider_id, am.model_id, am.variant"
+        ))?;
+        statement
+            .query_map(rusqlite::params_from_iter(values), |row| {
+                Ok(ModelUsage {
+                    provider_id: row.get(0)?,
+                    model_id: row.get(1)?,
+                    variant: row.get(2)?,
+                    usage: usage_from_row(row, 3)?,
+                })
+            })?
+            .collect::<Result<_, _>>()
+            .map_err(Error::from)
+    }
+
     pub fn session_detail(
         &self,
         source: &str,

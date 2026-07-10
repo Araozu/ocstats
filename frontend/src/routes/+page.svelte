@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
-	import type { ModelPricing, SessionUsage } from '$lib/api/ocstats';
+	import type { SessionUsage } from '$lib/api/ocstats';
 	import {
 		addUsage,
 		emptyUsage,
@@ -26,10 +26,8 @@
 	const projects = $derived(projectsQuery.data ?? []);
 	const sessions = $derived(sessionsQuery.data ?? []);
 	const models = $derived(modelsQuery.data ?? []);
-	let pricing = $state<ModelPricing[]>([]);
-	$effect(() => {
-		pricing = pricingQuery.data?.models ?? [];
-	});
+	const pricing = $derived(pricingQuery.data?.models ?? []);
+	let projectsCollapsed = $state(false);
 	const selectedProjectKey = $derived(page.url.searchParams.get('project') ?? 'all');
 	const selectedSession = $derived.by(() => {
 		const source = page.url.searchParams.get('source');
@@ -46,6 +44,7 @@
 	const selectedProject = $derived(
 		projects.find((project) => projectKey(project) === selectedProjectKey) ?? null
 	);
+	const modelUsageQuery = createQuery(() => usageQueries.modelUsage(selectedProject?.id ?? null));
 	const visibleSessions = $derived(
 		selectedProject
 			? sessions.filter(
@@ -66,13 +65,15 @@
 			sessionsQuery.error ??
 			modelsQuery.error ??
 			pricingQuery.error ??
+			modelUsageQuery.error ??
 			sessionQuery.error
 	);
 	const isRefreshing = $derived(
 		projectsQuery.isFetching ||
 			sessionsQuery.isFetching ||
 			modelsQuery.isFetching ||
-			pricingQuery.isFetching
+			pricingQuery.isFetching ||
+			modelUsageQuery.isFetching
 	);
 
 	function updateSelection(updates: Record<string, string | null>) {
@@ -101,7 +102,8 @@
 			projectsQuery.refetch(),
 			sessionsQuery.refetch(),
 			modelsQuery.refetch(),
-			pricingQuery.refetch()
+			pricingQuery.refetch(),
+			modelUsageQuery.refetch()
 		]);
 	}
 </script>
@@ -112,14 +114,20 @@
 </svelte:head>
 
 <div class="min-h-screen bg-background text-foreground">
-	<div class="grid min-h-screen lg:grid-cols-[16rem_19rem_minmax(0,1fr)]">
+	<div
+		class="grid min-h-screen {projectsCollapsed
+			? 'lg:grid-cols-[3.5rem_19rem_minmax(0,1fr)]'
+			: 'lg:grid-cols-[16rem_19rem_minmax(0,1fr)]'}"
+	>
 		<ProjectSidebar
 			{projects}
 			{selectedProjectKey}
 			{lastUpdated}
 			{isRefreshing}
+			collapsed={projectsCollapsed}
 			onRefresh={refreshDashboard}
 			onSelect={selectProject}
+			onToggle={() => (projectsCollapsed = !projectsCollapsed)}
 		/>
 		<SessionSidebar
 			sessions={visibleSessions}
@@ -128,10 +136,11 @@
 				? sessionKey(selectedSession.source, selectedSession.session_id)
 				: null}
 			isLoading={sessionsQuery.isPending}
+			onOverview={() => updateSelection({ source: null, session_id: null })}
 			onSelect={selectSession}
 		/>
 		<main class="min-w-0">
-			<div class="mx-auto max-w-7xl space-y-7 p-5 md:p-8">
+			<div class="mx-auto max-w-7xl space-y-7 px-5 py-4 md:px-8">
 				{#if error}
 					<div
 						class="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm"
@@ -153,17 +162,15 @@
 						<CircleNotchIcon class="animate-spin" size={17} /> Loading session details...
 					</div>
 				{:else if sessionQuery.data}
-					<SessionDetail
-						session={sessionQuery.data}
-						{pricing}
-						onBack={() => updateSelection({ source: null, session_id: null })}
-					/>
+					<SessionDetail session={sessionQuery.data} {pricing} />
 				{:else}
 					<Overview
 						{projectName}
 						sessions={visibleSessions}
 						modelCount={models.length}
 						{totals}
+						modelUsage={modelUsageQuery.data ?? []}
+						{pricing}
 						isLoading={sessionsQuery.isPending}
 						onSessionSelect={selectSession}
 					/>

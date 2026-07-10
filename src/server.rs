@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 
 use crate::{
-    AnalyticsStore, Error, ImportSummary, ModelSummary, PeriodUsage, PricingCatalog,
+    AnalyticsStore, Error, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, PricingCatalog,
     ProjectSummary, Reconciliation, SessionDetail, SessionUsage, UsageFilter, extract_default,
 };
 
@@ -73,6 +73,7 @@ fn router(store: SharedStore, catalog: PricingCatalog) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/usage/sessions", get(session_usage))
+        .route("/api/usage/models", get(model_usage))
         .route("/api/usage/session", get(session_detail))
         .route("/api/usage/periods", get(period_usage))
         .route("/api/reconciliation", get(reconciliation))
@@ -97,6 +98,13 @@ async fn session_usage(
     Query(filter): Query<UsageFilter>,
 ) -> Result<Json<Vec<SessionUsage>>, ApiError> {
     with_store(&state, |store| store.session_usage_filtered(&filter)).map(Json)
+}
+
+async fn model_usage(
+    State(state): State<AppState>,
+    Query(filter): Query<UsageFilter>,
+) -> Result<Json<Vec<ModelUsage>>, ApiError> {
+    with_store(&state, |store| store.model_usage_filtered(&filter)).map(Json)
 }
 
 async fn session_detail(

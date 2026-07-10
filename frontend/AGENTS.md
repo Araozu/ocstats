@@ -20,3 +20,10 @@ import ChartLineUpIcon from 'phosphor-svelte/lib/ChartLineUpIcon';
 ```
 
 Named imports from `phosphor-svelte` are supported, but the optimizer converts them to these per-icon default imports to improve development compile times.
+
+
+## Model pricing
+
+When using model pricing in computation or display, **always** use reactive values. Model pricing
+comes in late, and if not reactive, default values of `0` are used, thus values become invalid.
+

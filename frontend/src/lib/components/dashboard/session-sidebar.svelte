@@ -9,18 +9,20 @@
 		projectName,
 		selectedSessionKey,
 		isLoading = false,
+		onOverview,
 		onSelect
 	}: {
 		sessions: SessionUsage[];
 		projectName: string;
 		selectedSessionKey: string | null;
 		isLoading?: boolean;
+		onOverview: () => void;
 		onSelect: (session: SessionUsage) => void;
 	} = $props();
 </script>
 
 <aside
-	class="border-b bg-background lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-hidden lg:border-r lg:border-b-0"
+	class="flex flex-col border-b bg-background lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-hidden lg:border-r lg:border-b-0"
 >
 	<div class="flex h-16 items-center justify-between border-b px-4">
 		<div>
@@ -31,7 +33,18 @@
 		</div>
 		<Badge variant="secondary">{sessions.length}</Badge>
 	</div>
-	<div class="max-h-72 overflow-y-auto p-3 lg:h-[calc(100vh-4rem)] lg:max-h-none">
+	<div class="border-b p-3">
+		<button
+			class="w-full rounded-md px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted {selectedSessionKey ===
+			null
+				? 'bg-muted font-medium'
+				: 'text-muted-foreground'}"
+			onclick={onOverview}
+		>
+			Overview
+		</button>
+	</div>
+	<div class="max-h-72 min-h-0 overflow-y-auto p-3 lg:flex-1 lg:max-h-none">
 		<div class="space-y-1">
 			{#each sessions as session (sessionKey(session.source, session.session_id))}<button
 					class="w-full rounded-md border border-transparent px-2.5 py-2.5 text-left transition-colors hover:bg-muted {selectedSessionKey ===
