@@ -19,8 +19,12 @@
 		onBack
 	}: { session: SessionDetail; pricing: ModelPricing[]; onBack: () => void } = $props();
 
+	const pricingByModel = $derived(
+		new Map(pricing.map((item) => [`${item.provider}:${item.slug}`, item]))
+	);
+
 	function findPricing(provider: string, slug: string) {
-		return pricing.find((item) => item.provider === provider && item.slug === slug);
+		return pricingByModel.get(`${provider}:${slug}`);
 	}
 
 	function metricCost(kind: 'input' | 'cached_read' | 'reasoning' | 'output') {

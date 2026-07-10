@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
 	import type { SessionUsage } from '$lib/api/ocstats';
 	import DashboardHeader from '$lib/components/dashboard/dashboard-header.svelte';
@@ -22,16 +24,23 @@
 	const modelsQuery = createQuery(usageQueries.models);
 	const pricingQuery = createQuery(usageQueries.pricing);
 
-	let selectedProjectKey = $state('all');
-	let selectedSession = $state<SessionUsage | null>(null);
-	const sessionQuery = createQuery(() =>
-		usageQueries.session(selectedSession?.source ?? null, selectedSession?.session_id ?? null)
-	);
-
 	const projects = $derived(projectsQuery.data ?? []);
 	const sessions = $derived(sessionsQuery.data ?? []);
 	const models = $derived(modelsQuery.data ?? []);
 	const pricing = $derived(pricingQuery.data?.models ?? []);
+	const selectedProjectKey = $derived(page.url.searchParams.get('project') ?? 'all');
+	const selectedSession = $derived.by(() => {
+		const source = page.url.searchParams.get('source');
+		const sessionId = page.url.searchParams.get('session_id');
+		return source && sessionId
+			? (sessions.find(
+					(session) => session.source === source && session.session_id === sessionId
+				) ?? null)
+			: null;
+	});
+	const sessionQuery = createQuery(() =>
+		usageQueries.session(selectedSession?.source ?? null, selectedSession?.session_id ?? null)
+	);
 	const selectedProject = $derived(
 		projects.find((project) => projectKey(project) === selectedProjectKey) ?? null
 	);
@@ -64,13 +73,25 @@
 			pricingQuery.isFetching
 	);
 
+	function updateSelection(updates: Record<string, string | null>) {
+		const url = new URL(page.url);
+		for (const [key, value] of Object.entries(updates)) {
+			if (value) url.searchParams.set(key, value);
+			else url.searchParams.delete(key);
+		}
+		void goto(url, { replaceState: true, noScroll: true, keepFocus: true });
+	}
+
 	function selectProject(key: string) {
-		selectedProjectKey = key;
-		selectedSession = null;
+		updateSelection({ project: key, source: null, session_id: null });
 	}
 
 	function selectSession(session: SessionUsage) {
-		selectedSession = session;
+		updateSelection({
+			project: `${session.source}:${session.project_id}`,
+			source: session.source,
+			session_id: session.session_id
+		});
 	}
 
 	function refreshDashboard() {
@@ -133,7 +154,7 @@
 					<SessionDetail
 						session={sessionQuery.data}
 						{pricing}
-						onBack={() => (selectedSession = null)}
+						onBack={() => updateSelection({ source: null, session_id: null })}
 					/>
 				{:else}
 					<Overview
