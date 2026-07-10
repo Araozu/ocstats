@@ -6,7 +6,7 @@ mod server;
 
 pub use analytics::{
     AnalyticsStore, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, ProjectSummary,
-    Reconciliation, SessionDetail, SessionUsage, UsageFilter,
+    Reconciliation, SessionDetail, SessionUsage, Turn, UsageFilter,
 };
 pub use pricing::{ModelPricing, PricingCatalog};
 pub use server::serve_default;

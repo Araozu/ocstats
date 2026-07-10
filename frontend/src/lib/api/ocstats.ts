@@ -24,7 +24,15 @@ export type SessionUsage = {
 
 export type Model = { provider_id: string; model_id: string; variant: string | null };
 export type ModelUsage = Model & { usage: Usage };
-export type SessionDetail = SessionUsage & { models: ModelUsage[] };
+export type Turn = {
+	id: string;
+	message_id: string;
+	model: Model | null;
+	usage: Usage;
+	created_at_ms: number;
+	updated_at_ms: number;
+};
+export type SessionDetail = SessionUsage & { models: ModelUsage[]; turns: Turn[] };
 export type ModelPricing = {
 	provider: string;
 	slug: string;

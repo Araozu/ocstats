@@ -47,6 +47,16 @@ pub struct ModelUsage {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Turn {
+    pub id: String,
+    pub message_id: String,
+    pub model: Option<ModelSummary>,
+    pub usage: Usage,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionDetail {
     pub source: String,
     pub session_id: String,
@@ -55,6 +65,7 @@ pub struct SessionDetail {
     pub usage: Usage,
     pub source_kind: String,
     pub models: Vec<ModelUsage>,
+    pub turns: Vec<Turn>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
@@ -307,6 +318,39 @@ impl AnalyticsStore {
             })?
             .collect::<Result<_, _>>()?;
 
+        let mut turns_statement = self.connection.prepare(
+            "SELECT cs.id, cs.message_id, am.provider_id, am.model_id, am.variant,
+                    cs.cost, cs.input_tokens, cs.output_tokens, cs.reasoning_tokens,
+                    cs.cache_read_tokens, cs.cache_write_tokens, cs.total_tokens,
+                    cs.created_at_ms, cs.updated_at_ms
+             FROM completed_step cs
+             LEFT JOIN assistant_message am
+               ON am.source = cs.source AND am.id = cs.message_id
+             WHERE cs.source = ?1 AND cs.session_id = ?2
+             ORDER BY cs.created_at_ms, cs.id",
+        )?;
+        let turns = turns_statement
+            .query_map(params![source, session_id], |row| {
+                let provider_id: Option<String> = row.get(2)?;
+                let model_id: Option<String> = row.get(3)?;
+                let variant: Option<String> = row.get(4)?;
+                Ok(Turn {
+                    id: row.get(0)?,
+                    message_id: row.get(1)?,
+                    model: provider_id
+                        .zip(model_id)
+                        .map(|(provider_id, model_id)| ModelSummary {
+                            provider_id,
+                            model_id,
+                            variant,
+                        }),
+                    usage: usage_from_row(row, 5)?,
+                    created_at_ms: row.get(12)?,
+                    updated_at_ms: row.get(13)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
         Ok(Some(SessionDetail {
             source,
             session_id,
@@ -315,6 +359,7 @@ impl AnalyticsStore {
             usage,
             source_kind,
             models,
+            turns,
         }))
     }
 
