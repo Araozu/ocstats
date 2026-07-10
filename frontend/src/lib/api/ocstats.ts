@@ -28,6 +28,9 @@ export type Turn = {
 	id: string;
 	message_id: string;
 	model: Model | null;
+	user_message: string | null;
+	types: string[];
+	reason: string | null;
 	usage: Usage;
 	created_at_ms: number;
 	updated_at_ms: number;

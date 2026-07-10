@@ -51,6 +51,9 @@ pub struct Turn {
     pub id: String,
     pub message_id: String,
     pub model: Option<ModelSummary>,
+    pub user_message: Option<String>,
+    pub types: Vec<String>,
+    pub reason: Option<String>,
     pub usage: Usage,
     pub created_at_ms: i64,
     pub updated_at_ms: i64,
@@ -168,6 +171,9 @@ impl AnalyticsStore {
         }
         for message in &extraction.assistant_messages {
             upsert_message(&transaction, &source, message)?;
+        }
+        for message in &extraction.user_messages {
+            upsert_user_message(&transaction, &source, message)?;
         }
         for step in &extraction.steps {
             upsert_step(&transaction, &source, step)?;
@@ -320,12 +326,14 @@ impl AnalyticsStore {
 
         let mut turns_statement = self.connection.prepare(
             "SELECT cs.id, cs.message_id, am.provider_id, am.model_id, am.variant,
-                    cs.cost, cs.input_tokens, cs.output_tokens, cs.reasoning_tokens,
+                    cs.types, cs.reason, um.text, cs.cost, cs.input_tokens, cs.output_tokens, cs.reasoning_tokens,
                     cs.cache_read_tokens, cs.cache_write_tokens, cs.total_tokens,
                     cs.created_at_ms, cs.updated_at_ms
              FROM completed_step cs
              LEFT JOIN assistant_message am
                ON am.source = cs.source AND am.id = cs.message_id
+             LEFT JOIN user_message um
+               ON um.source = cs.source AND um.id = am.parent_id
              WHERE cs.source = ?1 AND cs.session_id = ?2
              ORDER BY cs.created_at_ms, cs.id",
         )?;
@@ -334,6 +342,7 @@ impl AnalyticsStore {
                 let provider_id: Option<String> = row.get(2)?;
                 let model_id: Option<String> = row.get(3)?;
                 let variant: Option<String> = row.get(4)?;
+                let types: String = row.get(5)?;
                 Ok(Turn {
                     id: row.get(0)?,
                     message_id: row.get(1)?,
@@ -344,9 +353,16 @@ impl AnalyticsStore {
                             model_id,
                             variant,
                         }),
-                    usage: usage_from_row(row, 5)?,
-                    created_at_ms: row.get(12)?,
-                    updated_at_ms: row.get(13)?,
+                    user_message: row.get(7)?,
+                    types: types
+                        .split('\u{1f}')
+                        .filter(|item| !item.is_empty())
+                        .map(str::to_owned)
+                        .collect(),
+                    reason: row.get(6)?,
+                    usage: usage_from_row(row, 8)?,
+                    created_at_ms: row.get(15)?,
+                    updated_at_ms: row.get(16)?,
                 })
             })?
             .collect::<Result<_, _>>()?;
@@ -500,7 +516,7 @@ impl AnalyticsStore {
              );
              CREATE TABLE IF NOT EXISTS assistant_message (
                source TEXT NOT NULL REFERENCES source(path), id TEXT NOT NULL, session_id TEXT NOT NULL,
-               provider_id TEXT NOT NULL, model_id TEXT NOT NULL, variant TEXT,
+               parent_id TEXT, provider_id TEXT NOT NULL, model_id TEXT NOT NULL, variant TEXT,
                cost REAL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
                reasoning_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_write_tokens INTEGER NOT NULL,
                total_tokens INTEGER, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL,
@@ -508,6 +524,7 @@ impl AnalyticsStore {
              );
              CREATE TABLE IF NOT EXISTS completed_step (
                source TEXT NOT NULL REFERENCES source(path), id TEXT NOT NULL, message_id TEXT NOT NULL, session_id TEXT NOT NULL,
+               types TEXT NOT NULL DEFAULT '', reason TEXT,
                cost REAL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
                reasoning_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_write_tokens INTEGER NOT NULL,
                total_tokens INTEGER, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL,
@@ -519,6 +536,11 @@ impl AnalyticsStore {
              );
              CREATE INDEX IF NOT EXISTS assistant_message_session ON assistant_message (source, session_id);
              CREATE INDEX IF NOT EXISTS completed_step_session ON completed_step (source, session_id);
+             CREATE TABLE IF NOT EXISTS user_message (
+               source TEXT NOT NULL REFERENCES source(path), id TEXT NOT NULL, session_id TEXT NOT NULL,
+               text TEXT NOT NULL, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL,
+               PRIMARY KEY (source, id)
+             );
              CREATE VIEW IF NOT EXISTS session_usage AS
              WITH step_totals AS (
                SELECT source, session_id, COUNT(*) AS records, SUM(cost) AS cost,
@@ -545,6 +567,14 @@ impl AnalyticsStore {
              FROM session s LEFT JOIN step_totals st ON st.source = s.source AND st.session_id = s.id
              LEFT JOIN message_totals mt ON mt.source = s.source AND mt.session_id = s.id;",
         )?;
+        ensure_column(&self.connection, "assistant_message", "parent_id", "TEXT")?;
+        ensure_column(
+            &self.connection,
+            "completed_step",
+            "types",
+            "TEXT NOT NULL DEFAULT ''",
+        )?;
+        ensure_column(&self.connection, "completed_step", "reason", "TEXT")?;
         Ok(())
     }
 }
@@ -672,8 +702,33 @@ fn upsert_message(
                 &message.model.model_id,
                 message.model.variant.as_deref(),
             )),
+            parent_id: message.parent_id.as_deref(),
+            types: None,
+            reason: None,
         },
     )
+}
+
+fn upsert_user_message(
+    connection: &Connection,
+    source: &str,
+    message: &crate::UserMessage,
+) -> Result<(), Error> {
+    connection.execute(
+        "INSERT INTO user_message (source, id, session_id, text, created_at_ms, updated_at_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
+         ON CONFLICT(source, id) DO UPDATE SET session_id=excluded.session_id, text=excluded.text,
+         created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms",
+        params![
+            source,
+            message.id,
+            message.session_id,
+            message.text,
+            message.created_at_ms,
+            message.updated_at_ms
+        ],
+    )?;
+    Ok(())
 }
 
 fn upsert_step(connection: &Connection, source: &str, step: &CompletedStep) -> Result<(), Error> {
@@ -689,6 +744,9 @@ fn upsert_step(connection: &Connection, source: &str, step: &CompletedStep) -> R
             created_at_ms: step.created_at_ms,
             updated_at_ms: step.updated_at_ms,
             model: None,
+            parent_id: None,
+            types: Some(&step.types),
+            reason: step.reason.as_deref(),
         },
     )
 }
@@ -701,6 +759,9 @@ struct UsageRecord<'a> {
     created_at_ms: i64,
     updated_at_ms: i64,
     model: Option<(&'a str, &'a str, Option<&'a str>)>,
+    parent_id: Option<&'a str>,
+    types: Option<&'a Vec<String>>,
+    reason: Option<&'a str>,
 }
 
 fn upsert_usage_record(
@@ -720,12 +781,18 @@ fn upsert_usage_record(
         .total_tokens
         .map(sqlite_token_count)
         .transpose()?;
+    let types = record
+        .types
+        .map(|values| values.join("\u{1f}"))
+        .unwrap_or_default();
     let sql = if table == "assistant_message" {
-        "INSERT INTO assistant_message VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
-         ON CONFLICT(source, id) DO UPDATE SET session_id=excluded.session_id, provider_id=excluded.provider_id, model_id=excluded.model_id, variant=excluded.variant, cost=excluded.cost, input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, reasoning_tokens=excluded.reasoning_tokens, cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens, total_tokens=excluded.total_tokens, created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms"
+        "INSERT INTO assistant_message (source, id, session_id, parent_id, provider_id, model_id, variant, cost, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, created_at_ms, updated_at_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
+         ON CONFLICT(source, id) DO UPDATE SET session_id=excluded.session_id, parent_id=excluded.parent_id, provider_id=excluded.provider_id, model_id=excluded.model_id, variant=excluded.variant, cost=excluded.cost, input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, reasoning_tokens=excluded.reasoning_tokens, cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens, total_tokens=excluded.total_tokens, created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms"
     } else {
-        "INSERT INTO completed_step VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
-         ON CONFLICT(source, id) DO UPDATE SET message_id=excluded.message_id, session_id=excluded.session_id, cost=excluded.cost, input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, reasoning_tokens=excluded.reasoning_tokens, cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens, total_tokens=excluded.total_tokens, created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms"
+        "INSERT INTO completed_step (source, id, message_id, session_id, types, reason, cost, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, created_at_ms, updated_at_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+         ON CONFLICT(source, id) DO UPDATE SET message_id=excluded.message_id, session_id=excluded.session_id, types=excluded.types, reason=excluded.reason, cost=excluded.cost, input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, reasoning_tokens=excluded.reasoning_tokens, cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens, total_tokens=excluded.total_tokens, created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms"
     };
     if table == "assistant_message" {
         connection.execute(
@@ -734,6 +801,7 @@ fn upsert_usage_record(
                 source,
                 record.id,
                 record.session_id,
+                record.parent_id,
                 provider_id,
                 model_id,
                 variant,
@@ -756,6 +824,8 @@ fn upsert_usage_record(
                 record.id,
                 record.message_id,
                 record.session_id,
+                types,
+                record.reason,
                 record.usage.cost,
                 input_tokens,
                 output_tokens,
@@ -773,6 +843,27 @@ fn upsert_usage_record(
 
 fn sqlite_token_count(value: u64) -> Result<i64, Error> {
     i64::try_from(value).map_err(|_| Error::TokenCount(value))
+}
+
+fn ensure_column(
+    connection: &Connection,
+    table: &str,
+    column: &str,
+    definition: &str,
+) -> Result<(), Error> {
+    let exists = connection
+        .prepare(&format!("PRAGMA table_info({table})"))?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .any(|name| name == column);
+    if !exists {
+        connection.execute(
+            &format!("ALTER TABLE {table} ADD COLUMN {column} {definition}"),
+            [],
+        )?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -827,6 +918,7 @@ mod tests {
                 AssistantMessage {
                     id: "message-steps".into(),
                     session_id: "session-steps".into(),
+                    parent_id: Some("user-steps".into()),
                     model: Model {
                         provider_id: "openai".into(),
                         model_id: "gpt-5".into(),
@@ -839,6 +931,7 @@ mod tests {
                 AssistantMessage {
                     id: "message-only".into(),
                     session_id: "session-message".into(),
+                    parent_id: None,
                     model: Model {
                         provider_id: "openai".into(),
                         model_id: "gpt-5".into(),
@@ -849,10 +942,13 @@ mod tests {
                     updated_at_ms: 2,
                 },
             ],
+            user_messages: vec![],
             steps: vec![CompletedStep {
                 id: "step-1".into(),
                 message_id: "message-steps".into(),
                 session_id: "session-steps".into(),
+                types: vec!["reasoning".into(), "bash".into()],
+                reason: Some("tool-calls".into()),
                 usage: usage(3.0, 30),
                 created_at_ms: 1,
                 updated_at_ms: 2,
@@ -870,6 +966,13 @@ mod tests {
         store.import(&extraction).unwrap();
 
         assert_eq!(store.source_schema_version(&source).unwrap(), Some(1));
+        let detail = store
+            .session_detail(&source.to_string_lossy(), "session-steps")
+            .unwrap()
+            .unwrap();
+        assert_eq!(detail.turns.len(), 1);
+        assert_eq!(detail.turns[0].types, vec!["reasoning", "bash"]);
+        assert_eq!(detail.turns[0].reason.as_deref(), Some("tool-calls"));
         assert_eq!(
             store.session_usage().unwrap(),
             vec![

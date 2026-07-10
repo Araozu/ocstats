@@ -86,6 +86,7 @@
 					<TableRow>
 						<TableHead class="pl-5">Turn</TableHead>
 						<TableHead>Model</TableHead>
+						<TableHead>Activity</TableHead>
 						<TableHead>Input</TableHead>
 						<TableHead>Cached</TableHead>
 						<TableHead>Output</TableHead>
@@ -95,6 +96,16 @@
 				<TableBody>
 					{#each session.turns as turn, index (turn.id)}
 						{@const model = turn.model}
+						{#if turn.user_message && (index === 0 || session.turns[index - 1].user_message !== turn.user_message)}
+							<TableRow class="bg-muted/40 hover:bg-muted/40">
+								<TableCell colspan={7} class="px-5 py-3">
+									<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+										User message
+									</p>
+									<p class="mt-1 whitespace-pre-wrap text-xs">{turn.user_message}</p>
+								</TableCell>
+							</TableRow>
+						{/if}
 						<TableRow>
 							<TableCell class="pl-5 font-mono text-xs">{index + 1}</TableCell>
 							<TableCell>
@@ -105,6 +116,12 @@
 									</p>
 								{:else}
 									<span class="text-xs text-muted-foreground">Unknown model</span>
+								{/if}
+							</TableCell>
+							<TableCell class="max-w-48">
+								<p class="truncate text-xs">{turn.types.join(' + ') || '—'}</p>
+								{#if turn.reason}
+									<p class="text-[11px] text-muted-foreground">{turn.reason}</p>
 								{/if}
 							</TableCell>
 							<TableCell>
@@ -139,7 +156,7 @@
 						</TableRow>
 					{:else}
 						<TableRow>
-							<TableCell colspan={6} class="h-24 text-center text-muted-foreground">
+							<TableCell colspan={7} class="h-24 text-center text-muted-foreground">
 								No completed turns.
 							</TableCell>
 						</TableRow>

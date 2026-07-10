@@ -119,8 +119,18 @@ pub struct Session {
 pub struct AssistantMessage {
     pub id: String,
     pub session_id: String,
+    pub parent_id: Option<String>,
     pub model: Model,
     pub usage: Usage,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct UserMessage {
+    pub id: String,
+    pub session_id: String,
+    pub text: String,
     pub created_at_ms: i64,
     pub updated_at_ms: i64,
 }
@@ -130,6 +140,8 @@ pub struct CompletedStep {
     pub id: String,
     pub message_id: String,
     pub session_id: String,
+    pub types: Vec<String>,
+    pub reason: Option<String>,
     pub usage: Usage,
     pub created_at_ms: i64,
     pub updated_at_ms: i64,
@@ -147,6 +159,7 @@ pub struct Extraction {
     pub source: PathBuf,
     pub sessions: Vec<Session>,
     pub assistant_messages: Vec<AssistantMessage>,
+    pub user_messages: Vec<UserMessage>,
     pub steps: Vec<CompletedStep>,
     pub issues: Vec<ParseIssue>,
 }
@@ -278,7 +291,7 @@ fn extract_messages(connection: &Connection, result: &mut Extraction) -> Result<
     for row in statement.query_map([], |row| {
         Ok((
             row.get::<_, String>(0)?,
-            row.get(1)?,
+            row.get::<_, String>(1)?,
             row.get::<_, String>(2)?,
             row.get(3)?,
             row.get(4)?,
@@ -290,6 +303,15 @@ fn extract_messages(connection: &Connection, result: &mut Extraction) -> Result<
             continue;
         };
         if data.get("role").and_then(Value::as_str) != Some("assistant") {
+            if data.get("role").and_then(Value::as_str) == Some("user") {
+                result.user_messages.push(UserMessage {
+                    id: id.clone(),
+                    session_id: session_id.clone(),
+                    text: message_text(connection, &id)?,
+                    created_at_ms,
+                    updated_at_ms,
+                });
+            }
             continue;
         }
         let Some(model) = model_from_value(&data) else {
@@ -308,6 +330,10 @@ fn extract_messages(connection: &Connection, result: &mut Extraction) -> Result<
         result.assistant_messages.push(AssistantMessage {
             id,
             session_id,
+            parent_id: data
+                .get("parentID")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
             model,
             usage,
             created_at_ms,
@@ -322,7 +348,7 @@ fn extract_steps(connection: &Connection, result: &mut Extraction) -> Result<(),
     for row in statement.query_map([], |row| {
         Ok((
             row.get::<_, String>(0)?,
-            row.get(1)?,
+            row.get::<_, String>(1)?,
             row.get(2)?,
             row.get::<_, String>(3)?,
             row.get(4)?,
@@ -343,14 +369,75 @@ fn extract_steps(connection: &Connection, result: &mut Extraction) -> Result<(),
         };
         result.steps.push(CompletedStep {
             id,
-            message_id,
+            message_id: message_id.clone(),
             session_id,
+            types: part_types(connection, &message_id)?,
+            reason: data
+                .get("reason")
+                .and_then(Value::as_str)
+                .map(str::to_owned),
             usage,
             created_at_ms,
             updated_at_ms,
         });
     }
     Ok(())
+}
+
+fn message_text(connection: &Connection, message_id: &str) -> Result<String, Error> {
+    let mut statement = connection.prepare(
+        "SELECT data FROM part WHERE message_id = ?1 AND json_extract(data, '$.type') = 'text'
+         ORDER BY time_created, id",
+    )?;
+    let texts = statement
+        .query_map([message_id], |row| {
+            let raw: String = row.get(0)?;
+            let value: Value = serde_json::from_str(&raw).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(
+                    0,
+                    rusqlite::types::Type::Text,
+                    Box::new(error),
+                )
+            })?;
+            Ok(value
+                .get("text")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned())
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(texts.join("\n"))
+}
+
+fn part_types(connection: &Connection, message_id: &str) -> Result<Vec<String>, Error> {
+    let mut statement = connection
+        .prepare("SELECT data FROM part WHERE message_id = ?1 ORDER BY time_created, id")?;
+    let mut types = Vec::new();
+    for row in statement.query_map([message_id], |row| row.get::<_, String>(0))? {
+        let raw = row?;
+        let data: Value = serde_json::from_str(&raw).map_err(|error| {
+            rusqlite::Error::FromSqlConversionFailure(
+                0,
+                rusqlite::types::Type::Text,
+                Box::new(error),
+            )
+        })?;
+        let Some(kind) = data.get("type").and_then(Value::as_str) else {
+            continue;
+        };
+        if kind == "step-finish" || kind == "step-start" {
+            continue;
+        }
+        let label = if kind == "tool" {
+            data.get("tool").and_then(Value::as_str).unwrap_or(kind)
+        } else {
+            kind
+        };
+        if !types.iter().any(|item| item == label) {
+            types.push(label.to_owned());
+        }
+    }
+    Ok(types)
 }
 
 fn parse_model(raw: Option<String>) -> Option<Model> {
