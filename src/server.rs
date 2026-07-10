@@ -15,7 +15,7 @@ use tower_http::cors::CorsLayer;
 
 use crate::{
     AnalyticsStore, Error, ImportSummary, ModelSummary, PeriodUsage, ProjectSummary,
-    Reconciliation, SessionUsage, UsageFilter, extract_default,
+    Reconciliation, SessionDetail, SessionUsage, UsageFilter, extract_default,
 };
 
 type SharedStore = Arc<Mutex<AnalyticsStore>>;
@@ -30,6 +30,12 @@ struct PeriodQuery {
     #[serde(flatten)]
     filter: UsageFilter,
     period_ms: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct SessionDetailQuery {
+    source: String,
+    session_id: String,
 }
 
 #[derive(Serialize)]
@@ -65,6 +71,7 @@ fn router(store: SharedStore) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/usage/sessions", get(session_usage))
+        .route("/api/usage/session", get(session_detail))
         .route("/api/usage/periods", get(period_usage))
         .route("/api/reconciliation", get(reconciliation))
         .route("/api/projects", get(projects))
@@ -84,6 +91,19 @@ async fn session_usage(
     Query(filter): Query<UsageFilter>,
 ) -> Result<Json<Vec<SessionUsage>>, ApiError> {
     with_store(&state, |store| store.session_usage_filtered(&filter)).map(Json)
+}
+
+async fn session_detail(
+    State(state): State<AppState>,
+    Query(query): Query<SessionDetailQuery>,
+) -> Result<Json<SessionDetail>, ApiError> {
+    let detail = with_store(&state, |store| {
+        store.session_detail(&query.source, &query.session_id)
+    })?;
+    detail.map(Json).ok_or(ApiError {
+        status: StatusCode::NOT_FOUND,
+        error: "session not found".into(),
+    })
 }
 
 async fn period_usage(

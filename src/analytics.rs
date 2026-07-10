@@ -37,6 +37,25 @@ pub struct SessionUsage {
     pub source_kind: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ModelUsage {
+    pub provider_id: String,
+    pub model_id: String,
+    pub variant: Option<String>,
+    pub usage: Usage,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SessionDetail {
+    pub source: String,
+    pub session_id: String,
+    pub project_id: String,
+    pub title: String,
+    pub usage: Usage,
+    pub source_kind: String,
+    pub models: Vec<ModelUsage>,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UsageFilter {
     pub project_id: Option<String>,
@@ -182,6 +201,64 @@ impl AnalyticsStore {
             })?
             .collect::<Result<_, _>>()
             .map_err(Error::from)
+    }
+
+    pub fn session_detail(
+        &self,
+        source: &str,
+        session_id: &str,
+    ) -> Result<Option<SessionDetail>, Error> {
+        let mut statement = self.connection.prepare(
+            "SELECT su.source, su.session_id, s.project_id, s.title, su.cost, su.input_tokens,
+                    su.output_tokens, su.reasoning_tokens, su.cache_read_tokens, su.cache_write_tokens,
+                    su.total_tokens, su.source_kind
+             FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
+             WHERE su.source = ?1 AND su.session_id = ?2",
+        )?;
+        let Some((source, session_id, project_id, title, usage, source_kind)) = statement
+            .query_row(params![source, session_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    usage_from_row(row, 4)?,
+                    row.get(11)?,
+                ))
+            })
+            .optional()?
+        else {
+            return Ok(None);
+        };
+
+        let mut models_statement = self.connection.prepare(
+            "SELECT provider_id, model_id, variant, SUM(cost), SUM(input_tokens), SUM(output_tokens),
+                    SUM(reasoning_tokens), SUM(cache_read_tokens), SUM(cache_write_tokens), SUM(total_tokens)
+             FROM assistant_message
+             WHERE source = ?1 AND session_id = ?2
+             GROUP BY provider_id, model_id, variant
+             ORDER BY provider_id, model_id, variant",
+        )?;
+        let models = models_statement
+            .query_map(params![source, session_id], |row| {
+                Ok(ModelUsage {
+                    provider_id: row.get(0)?,
+                    model_id: row.get(1)?,
+                    variant: row.get(2)?,
+                    usage: usage_from_row(row, 3)?,
+                })
+            })?
+            .collect::<Result<_, _>>()?;
+
+        Ok(Some(SessionDetail {
+            source,
+            session_id,
+            project_id,
+            title,
+            usage,
+            source_kind,
+            models,
+        }))
     }
 
     pub fn period_usage(

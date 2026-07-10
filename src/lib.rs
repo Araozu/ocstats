@@ -4,8 +4,8 @@ mod analytics;
 mod server;
 
 pub use analytics::{
-    AnalyticsStore, ImportSummary, ModelSummary, PeriodUsage, ProjectSummary, Reconciliation,
-    SessionUsage, UsageFilter,
+    AnalyticsStore, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, ProjectSummary,
+    Reconciliation, SessionDetail, SessionUsage, UsageFilter,
 };
 pub use server::serve_default;
 
