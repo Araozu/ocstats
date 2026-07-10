@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { ModelUsage } from '$lib/api/ocstats';
+	import { requestPricing, type ModelUsage } from '$lib/api/ocstats';
 	import InfoIcon from 'phosphor-svelte/lib/InfoIcon';
 	import { getModelPricingContext } from '$lib/model-pricing';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
@@ -23,12 +23,24 @@
 		description?: string;
 	} = $props();
 	const pricingStore = getModelPricingContext();
+	const requestedPricing = new Set<string>();
 
 	const pricedModels = $derived.by(() => {
 		return models.map((model) => ({
 			model,
 			pricing: $pricingStore.find(model)
 		}));
+	});
+
+	$effect(() => {
+		if (!$pricingStore.loaded) return;
+		for (const model of models) {
+			if ($pricingStore.find(model) || requestedPricing.has(model.model_id)) continue;
+			requestedPricing.add(model.model_id);
+			void requestPricing(model.model_id).catch(() => {
+				requestedPricing.delete(model.model_id);
+			});
+		}
 	});
 </script>
 

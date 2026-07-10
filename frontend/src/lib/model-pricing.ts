@@ -7,13 +7,14 @@ export type PricingRate = 'input' | 'cached_read' | 'cached_write' | 'output';
 type PricedModel = Pick<Model, 'provider_id' | 'model_id'>;
 
 export type ModelPricingSnapshot = {
+	loaded: boolean;
 	find(model: PricedModel): ModelPricing | undefined;
 	cost(model: PricedModel, tokens: number, rate: PricingRate): number | null;
 	totalCost(models: ModelUsage[]): number | null;
 };
 
 export type ModelPricingStore = Readable<ModelPricingSnapshot> & {
-	set(pricing: ModelPricing[]): void;
+	set(pricing: ModelPricing[], loaded?: boolean): void;
 };
 
 const MODEL_PRICING_CONTEXT = Symbol('model-pricing');
@@ -22,7 +23,7 @@ function pricingKey(provider: string, slug: string) {
 	return `${provider}\0${slug}`;
 }
 
-function createSnapshot(pricing: ModelPricing[]): ModelPricingSnapshot {
+function createSnapshot([pricing, loaded]: [ModelPricing[], boolean]): ModelPricingSnapshot {
 	const byProviderAndSlug = new Map<string, ModelPricing>();
 	const bySlug = new Map<string, ModelPricing>();
 
@@ -62,6 +63,7 @@ function createSnapshot(pricing: ModelPricing[]): ModelPricingSnapshot {
 	}
 
 	return {
+		loaded,
 		find,
 		cost(model, tokens, rate) {
 			return thisCost(model, tokens, rate);
@@ -71,9 +73,14 @@ function createSnapshot(pricing: ModelPricing[]): ModelPricingSnapshot {
 }
 
 export function createModelPricingStore(): ModelPricingStore {
-	const catalog = writable<ModelPricing[]>([]);
+	const catalog = writable<[ModelPricing[], boolean]>([[], false]);
 	const snapshot = derived(catalog, createSnapshot);
-	return { subscribe: snapshot.subscribe, set: catalog.set };
+	return {
+		subscribe: snapshot.subscribe,
+		set(pricing, loaded = true) {
+			catalog.set([pricing, loaded]);
+		}
+	};
 }
 
 export function setModelPricingContext(): ModelPricingStore {

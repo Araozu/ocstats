@@ -61,6 +61,15 @@ export const getModelUsage = (projectId?: string) =>
 export const getModels = () => get<Model[]>('/models');
 export const getPricing = () => get<PricingCatalog>('/pricing');
 
+export async function requestPricing(slug: string): Promise<void> {
+	const response = await fetch(`${API_URL}/pricing/request`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ slug })
+	});
+	if (!response.ok) throw new Error('The analytics service returned an error.');
+}
+
 export function getSession(source: string, sessionId: string) {
 	const params = new URLSearchParams({ source, session_id: sessionId });
 	return get<SessionDetail>(`/usage/session?${params}`);

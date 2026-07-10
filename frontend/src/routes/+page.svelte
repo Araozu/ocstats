@@ -29,7 +29,7 @@
 	const models = $derived(modelsQuery.data ?? []);
 	const pricing = $derived(pricingQuery.data?.models ?? []);
 	const modelPricing = setModelPricingContext();
-	$effect(() => modelPricing.set(pricing));
+	$effect(() => modelPricing.set(pricing, pricingQuery.data !== undefined));
 	let projectsCollapsed = $state(false);
 	const selectedProjectKey = $derived(page.url.searchParams.get('project') ?? 'all');
 	const selectedSession = $derived.by(() => {

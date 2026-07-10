@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     env, fs,
     path::{Path, PathBuf},
 };
@@ -33,6 +34,39 @@ impl PricingCatalog {
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Error> {
         let contents = fs::read_to_string(path)?;
         Ok(serde_yaml::from_str(&contents)?)
+    }
+}
+
+#[derive(Debug)]
+pub struct PricingRequests {
+    path: PathBuf,
+}
+
+impl PricingRequests {
+    pub fn new(path: impl Into<PathBuf>) -> Self {
+        Self { path: path.into() }
+    }
+
+    pub fn record(&self, slug: &str) -> Result<(), Error> {
+        let existing = match fs::read_to_string(&self.path) {
+            Ok(contents) => contents,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => return Err(error.into()),
+        };
+
+        let mut slugs = BTreeSet::new();
+        slugs.extend(
+            existing
+                .lines()
+                .filter(|line| !line.is_empty())
+                .map(str::to_owned),
+        );
+        slugs.insert(slug.to_owned());
+
+        let mut contents = slugs.into_iter().collect::<Vec<_>>().join("\n");
+        contents.push('\n');
+        fs::write(&self.path, contents)?;
+        Ok(())
     }
 }
 

@@ -13,6 +13,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 
+use crate::pricing::PricingRequests;
 use crate::{
     AnalyticsStore, Error, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, PricingCatalog,
     ProjectSummary, Reconciliation, SessionDetail, SessionUsage, UsageFilter, extract_default,
@@ -24,6 +25,7 @@ type SharedStore = Arc<Mutex<AnalyticsStore>>;
 struct AppState {
     store: SharedStore,
     pricing: PricingCatalog,
+    pricing_requests: Arc<Mutex<PricingRequests>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -70,6 +72,14 @@ pub async fn serve_default(port: u16) -> Result<(), Error> {
 }
 
 fn router(store: SharedStore, catalog: PricingCatalog) -> Router {
+    router_with_requests(store, catalog, PricingRequests::new("pricing-requests.txt"))
+}
+
+fn router_with_requests(
+    store: SharedStore,
+    catalog: PricingCatalog,
+    pricing_requests: PricingRequests,
+) -> Router {
     Router::new()
         .route("/api/health", get(health))
         .route("/api/usage/sessions", get(session_usage))
@@ -80,12 +90,14 @@ fn router(store: SharedStore, catalog: PricingCatalog) -> Router {
         .route("/api/projects", get(projects))
         .route("/api/models", get(models))
         .route("/api/pricing", get(pricing_endpoint))
+        .route("/api/pricing/request", post(request_pricing))
         .route("/api/import", post(import))
         // The frontend commonly runs from a separate local development origin.
         .layer(CorsLayer::permissive())
         .with_state(AppState {
             store,
             pricing: catalog,
+            pricing_requests: Arc::new(Mutex::new(pricing_requests)),
         })
 }
 
@@ -147,6 +159,30 @@ async fn models(State(state): State<AppState>) -> Result<Json<Vec<ModelSummary>>
 
 async fn pricing_endpoint(State(state): State<AppState>) -> Json<PricingCatalog> {
     Json(state.pricing)
+}
+
+#[derive(Debug, Deserialize)]
+struct PricingRequest {
+    slug: String,
+}
+
+async fn request_pricing(
+    State(state): State<AppState>,
+    Json(request): Json<PricingRequest>,
+) -> Result<StatusCode, ApiError> {
+    if request.slug.trim().is_empty() {
+        return Err(ApiError {
+            status: StatusCode::BAD_REQUEST,
+            error: "pricing request slug must not be empty".into(),
+        });
+    }
+
+    let requests = state.pricing_requests.lock().map_err(|_| ApiError {
+        status: StatusCode::INTERNAL_SERVER_ERROR,
+        error: "pricing request lock was poisoned".into(),
+    })?;
+    requests.record(request.slug.trim()).map_err(api_error)?;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 async fn import(State(state): State<AppState>) -> Result<Json<ImportSummary>, ApiError> {
@@ -223,7 +259,7 @@ mod tests {
         let store = Arc::new(Mutex::new(
             AnalyticsStore::open(directory.path().join("analytics.db")).unwrap(),
         ));
-        let app = router(
+        let app = router_with_requests(
             store,
             PricingCatalog {
                 models: vec![crate::ModelPricing {
@@ -235,6 +271,7 @@ mod tests {
                     output: 2.0,
                 }],
             },
+            crate::pricing::PricingRequests::new(directory.path().join("pricing-requests.txt")),
         );
         let response = app
             .oneshot(
@@ -246,6 +283,39 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn pricing_request_endpoint_records_unique_slugs() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = Arc::new(Mutex::new(
+            AnalyticsStore::open(directory.path().join("analytics.db")).unwrap(),
+        ));
+        let requests_path = directory.path().join("pricing-requests.txt");
+        let app = router_with_requests(
+            store,
+            PricingCatalog { models: vec![] },
+            crate::pricing::PricingRequests::new(&requests_path),
+        );
+
+        for slug in ["gpt-unknown", "gpt-unknown", "claude-unknown"] {
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::post("/api/pricing/request")
+                        .header("content-type", "application/json")
+                        .body(Body::from(format!(r#"{{"slug":"{slug}"}}"#)))
+                        .unwrap(),
+                )
+                .await
+                .unwrap();
+            assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        }
+
+        assert_eq!(
+            std::fs::read_to_string(requests_path).unwrap(),
+            "claude-unknown\ngpt-unknown\n"
+        );
     }
 
     #[tokio::test]

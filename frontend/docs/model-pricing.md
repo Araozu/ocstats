@@ -5,6 +5,12 @@ request succeeds, so any lookup or cost derived from pricing must remain reactiv
 matched model, or total once during component initialization captures the initial empty catalog and
 leaves the UI showing incorrect costs.
 
+When the loaded catalog has no entry for a model used by the application, the dashboard sends
+`POST /api/pricing/request` with `{ "slug": "model-slug" }`. The backend records requested slugs in
+`pricing-requests.txt` in its execution directory, one slug per line, and keeps the file
+deduplicated. The request is only made after the pricing catalog has loaded, so the initial empty
+catalog is not mistaken for missing prices.
+
 ## Architecture
 
 The pricing query is created once in `src/routes/+page.svelte`. That route creates a context-scoped
