@@ -7,7 +7,14 @@ async fn main() -> ExitCode {
         && command == "serve"
     {
         let port = match arguments.as_slice() {
-            [_] => 4117,
+            [_] => match std::env::var("OCSTATS_PORT") {
+                Ok(port) => match port.parse() {
+                    Ok(port) => port,
+                    Err(_) => return usage(),
+                },
+                Err(std::env::VarError::NotPresent) => 4117,
+                Err(std::env::VarError::NotUnicode(_)) => return usage(),
+            },
             [_, port] => match port.parse() {
                 Ok(port) => port,
                 Err(_) => return usage(),

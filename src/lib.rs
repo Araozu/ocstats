@@ -165,12 +165,11 @@ pub struct Extraction {
 }
 
 /// Resolve OpenCode's database according to its current documented path rules.
+///
+/// `OPENCODE_BASE_PATH` overrides the directory containing `opencode.db`, which
+/// is useful when the OpenCode data directory is mounted into a container.
 pub fn default_database_path() -> Result<PathBuf, Error> {
-    let data_dir = env::var_os("XDG_DATA_HOME")
-        .map(PathBuf::from)
-        .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
-        .ok_or_else(|| Error::DataPath("set HOME or XDG_DATA_HOME".into()))?
-        .join("opencode");
+    let data_dir = opencode_data_dir()?;
 
     match env::var_os("OPENCODE_DB") {
         Some(value) if value == ":memory:" => Err(Error::DataPath(
@@ -185,6 +184,20 @@ pub fn default_database_path() -> Result<PathBuf, Error> {
             })
         }
         None => Ok(data_dir.join("opencode.db")),
+    }
+}
+
+fn opencode_data_dir() -> Result<PathBuf, Error> {
+    match env::var_os("OPENCODE_BASE_PATH") {
+        Some(path) if !path.is_empty() => Ok(PathBuf::from(path)),
+        Some(_) => Err(Error::DataPath(
+            "OPENCODE_BASE_PATH must not be empty".into(),
+        )),
+        None => env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .or_else(|| env::var_os("HOME").map(|home| PathBuf::from(home).join(".local/share")))
+            .map(|data_dir| data_dir.join("opencode"))
+            .ok_or_else(|| Error::DataPath("set HOME or XDG_DATA_HOME".into())),
     }
 }
 

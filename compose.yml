@@ -1,0 +1,29 @@
+services:
+  ocstats:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ocstats
+    volumes:
+      # This directory must contain opencode.db (and its SQLite WAL files, if present).
+      - ./data/opencode/share:/opencode:ro
+      - ./data/ocstats:/var/lib/ocstats
+    environment:
+      OCSTATS_PORT: "4117"
+      OPENCODE_BASE_PATH: /opencode
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ocstats.rule=Host(`oc.araoz.dev`)"
+      - "traefik.http.routers.ocstats.entrypoints=websecure"
+      - "traefik.http.routers.ocstats.tls=true"
+      - "traefik.http.routers.ocstats.tls.certresolver=araoz-wildcard"
+      - "traefik.http.routers.ocstats.tls.domains[0].main=araoz.dev"
+      - "traefik.http.routers.ocstats.tls.domains[0].sans=*.araoz.dev"
+      - "traefik.http.services.ocstats.loadbalancer.server.port=4117"
+    networks:
+      - proxy
+    restart: unless-stopped
+
+networks:
+  proxy:
+    external: true

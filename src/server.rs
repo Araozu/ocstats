@@ -70,7 +70,7 @@ pub async fn serve_default(port: u16) -> Result<(), Error> {
     let mut analytics_store = AnalyticsStore::open_default()?;
     analytics_store.import(&extraction)?;
     let store = Arc::new(Mutex::new(analytics_store));
-    let address = SocketAddr::from(([127, 0, 0, 1], port));
+    let address = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(address).await?;
     axum::serve(listener, router(store, pricing)).await?;
     Ok(())
