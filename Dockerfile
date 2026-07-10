@@ -29,4 +29,7 @@ ENV OPENCODE_BASE_PATH=/opencode
 VOLUME ["/var/lib/ocstats"]
 EXPOSE 4117
 
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+  CMD ["/usr/local/bin/ocstats", "healthcheck"]
+
 CMD ["/usr/local/bin/ocstats", "serve"]

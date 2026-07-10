@@ -3,6 +3,15 @@ use std::process::ExitCode;
 #[tokio::main]
 async fn main() -> ExitCode {
     let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    if arguments.as_slice() == ["healthcheck"] {
+        return match ocstats::check_default_database() {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("ocstats: {error}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     if let [command] | [command, _] | [command, _, _] = arguments.as_slice()
         && command == "serve"
     {
@@ -65,6 +74,6 @@ async fn main() -> ExitCode {
 }
 
 fn usage() -> ExitCode {
-    eprintln!("usage: ocstats [serve [--port PORT|PORT]]");
+    eprintln!("usage: ocstats [healthcheck|serve [--port PORT|PORT]]");
     ExitCode::FAILURE
 }

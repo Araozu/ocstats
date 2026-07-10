@@ -77,6 +77,8 @@ pub enum Error {
     TokenCount(u64),
     #[error("aggregation period must be greater than zero")]
     InvalidPeriod,
+    #[error("invalid configuration: {0}")]
+    Configuration(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -214,15 +216,29 @@ pub fn extract_default() -> Result<Extraction, Error> {
     extract_from_path(default_database_path()?)
 }
 
+/// Verify that the configured OpenCode database can be opened read-only.
+pub fn check_default_database() -> Result<(), Error> {
+    check_database_path(default_database_path()?)
+}
+
 pub fn extract_from_path(path: impl AsRef<Path>) -> Result<Extraction, Error> {
-    let path = path.as_ref();
+    let path = path.as_ref().to_owned();
+    let connection = open_database(&path)?;
+    validate_schema(&connection)?;
+    extract(&connection, path)
+}
+
+pub(crate) fn check_database_path(path: impl AsRef<Path>) -> Result<(), Error> {
+    open_database(path.as_ref()).map(|_| ())
+}
+
+fn open_database(path: &Path) -> Result<Connection, Error> {
     if !path.is_file() {
         return Err(Error::MissingDatabase(path.to_owned()));
     }
     let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
     connection.busy_timeout(Duration::from_secs(5))?;
-    validate_schema(&connection)?;
-    extract(&connection, path.to_owned())
+    Ok(connection)
 }
 
 pub fn validate_schema(connection: &Connection) -> Result<(), Error> {

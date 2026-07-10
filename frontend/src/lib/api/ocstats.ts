@@ -1,4 +1,4 @@
-const API_URL = 'http://127.0.0.1:4117/api';
+const API_URL = '/api';
 
 export type Project = { source: string; id: string; name: string | null; worktree: string };
 
@@ -45,6 +45,7 @@ export type ModelPricing = {
 	output: number;
 };
 export type PricingCatalog = { models: ModelPricing[] };
+export type AuthStatus = { authenticated: boolean };
 
 async function get<T>(path: string): Promise<T> {
 	const response = await fetch(`${API_URL}${path}`);
@@ -60,6 +61,16 @@ export const getModelUsage = (projectId?: string) =>
 	);
 export const getModels = () => get<Model[]>('/models');
 export const getPricing = () => get<PricingCatalog>('/pricing');
+export const getAuthStatus = () => get<AuthStatus>('/auth/status');
+
+export async function login(password: string): Promise<void> {
+	const response = await fetch(`${API_URL}/auth/login`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify({ password })
+	});
+	if (!response.ok) throw new Error('Incorrect password.');
+}
 
 export async function requestPricing(slug: string): Promise<void> {
 	const response = await fetch(`${API_URL}/pricing/request`, {

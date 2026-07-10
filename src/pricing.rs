@@ -25,10 +25,10 @@ pub struct PricingCatalog {
 
 impl PricingCatalog {
     pub fn load_default() -> Result<Self, Error> {
-        let path = env::var_os("OCSTATS_PRICING_FILE")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| PathBuf::from("pricing.yaml"));
-        Self::load(path)
+        match env::var_os("OCSTATS_PRICING_FILE") {
+            Some(path) => Self::load(PathBuf::from(path)),
+            None => Ok(serde_yaml::from_str(include_str!("../pricing.yaml"))?),
+        }
     }
 
     pub fn load(path: impl AsRef<Path>) -> Result<Self, Error> {

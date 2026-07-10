@@ -22,8 +22,12 @@ The container receives its configuration from environment variables:
 | --- | --- | --- |
 | `OCSTATS_PORT` | `4117` | HTTP server port. A `serve --port` argument takes precedence. |
 | `OPENCODE_BASE_PATH` | OpenCode's standard XDG data directory | Directory containing `opencode.db`. |
+| `OCSTATS_PASSWORD` | Required | Dashboard password. It is exchanged for an HttpOnly session cookie. |
+| `OCSTATS_COOKIE_SECURE` | `true` | Set to `false` only for local HTTP development; production HTTPS must keep it enabled. |
 
 The image stores OC Stats' imported analytics database in `/var/lib/ocstats`, separately from the read-only OpenCode data mount.
+Its Docker health check opens the configured OpenCode database read-only; it becomes unhealthy when the database is absent or inaccessible.
+The default pricing catalog is embedded in the binary. Set `OCSTATS_PRICING_FILE` only to load a replacement catalog from a mounted file.
 
 Build the image with:
 
@@ -42,6 +46,7 @@ services:
     environment:
       OCSTATS_PORT: "4117"
       OPENCODE_BASE_PATH: /opencode
+      OCSTATS_PASSWORD: ${OCSTATS_PASSWORD:?Set OCSTATS_PASSWORD}
     volumes:
       - ${HOME}/.local/share/opencode:/opencode:ro
       - ocstats-data:/var/lib/ocstats

@@ -9,19 +9,20 @@ import {
 } from '$lib/api/ocstats';
 
 export const usageQueries = {
-	projects: () => queryOptions({ queryKey: ['projects'], queryFn: getProjects }),
-	sessions: () => queryOptions({ queryKey: ['sessions'], queryFn: getSessions }),
-	modelUsage: (projectId: string | null) =>
+	projects: (enabled: boolean) => queryOptions({ queryKey: ['projects'], queryFn: getProjects, enabled }),
+	sessions: (enabled: boolean) => queryOptions({ queryKey: ['sessions'], queryFn: getSessions, enabled }),
+	modelUsage: (projectId: string | null, enabled: boolean) =>
 		queryOptions({
 			queryKey: ['model-usage', projectId],
-			queryFn: () => getModelUsage(projectId ?? undefined)
+			queryFn: () => getModelUsage(projectId ?? undefined),
+			enabled
 		}),
-	models: () => queryOptions({ queryKey: ['models'], queryFn: getModels }),
-	pricing: () => queryOptions({ queryKey: ['pricing'], queryFn: getPricing }),
-	session: (source: string | null, sessionId: string | null) =>
+	models: (enabled: boolean) => queryOptions({ queryKey: ['models'], queryFn: getModels, enabled }),
+	pricing: (enabled: boolean) => queryOptions({ queryKey: ['pricing'], queryFn: getPricing, enabled }),
+	session: (source: string | null, sessionId: string | null, enabled: boolean) =>
 		queryOptions({
 			queryKey: ['session', source, sessionId],
 			queryFn: () => getSession(source!, sessionId!),
-			enabled: Boolean(source && sessionId)
+			enabled: enabled && Boolean(source && sessionId)
 		})
 };

@@ -28,6 +28,7 @@
 	const pricingStore = getModelPricingContext();
 	const requestedPricing = new SvelteSet<string>();
 	let grouping = $state('provider');
+	const totalTokens = $derived(models.reduce((total, model) => total + (model.usage.total_tokens ?? 0), 0));
 
 	function addUsage(left: Usage, right: Usage): Usage {
 		return {
@@ -57,6 +58,14 @@
 			total += cost ?? 0;
 		}
 		return total;
+	}
+
+	function tokenPercentage(tokens: number | null | undefined) {
+		if (!totalTokens) return '0%';
+		return new Intl.NumberFormat('en-US', {
+			style: 'percent',
+			maximumFractionDigits: 1
+		}).format((tokens ?? 0) / totalTokens);
 	}
 
 	const modelRows = $derived.by(() => {
@@ -155,7 +164,7 @@
 						<TableCell class="pr-5 text-right text-xs font-medium">
 							<p>{formatNumber(model.usage.total_tokens)}</p>
 							<p class="text-[11px] text-muted-foreground">
-								{formatCost($pricingStore.totalCost(pricingModels))}
+								{formatCost($pricingStore.totalCost(pricingModels))}, {tokenPercentage(model.usage.total_tokens)}
 							</p>
 						</TableCell>
 					</TableRow>

@@ -1,23 +1,27 @@
 use std::{
     net::SocketAddr,
+    path::PathBuf,
     sync::{Arc, Mutex},
 };
 
 use axum::{
     Json, Router,
-    extract::{Query, State},
-    http::{StatusCode, Uri},
+    extract::{Query, Request, State},
+    http::{HeaderMap, HeaderValue, StatusCode, Uri},
+    middleware::{self, Next},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tower_http::cors::CorsLayer;
 
 use crate::pricing::PricingRequests;
 use crate::{
     AnalyticsStore, Error, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, PricingCatalog,
-    ProjectSummary, Reconciliation, SessionDetail, SessionUsage, UsageFilter, extract_default,
+    ProjectSummary, Reconciliation, SessionDetail, SessionUsage, UsageFilter, check_database_path,
+    default_analytics_path, default_database_path, extract_default,
 };
 
 type SharedStore = Arc<Mutex<AnalyticsStore>>;
@@ -31,6 +35,14 @@ struct AppState {
     store: SharedStore,
     pricing: PricingCatalog,
     pricing_requests: Arc<Mutex<PricingRequests>>,
+    source_database: Option<PathBuf>,
+    auth: AuthState,
+}
+
+#[derive(Clone)]
+struct AuthState {
+    session_token: String,
+    secure_cookie: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -49,6 +61,17 @@ struct SessionDetailQuery {
 #[derive(Serialize)]
 struct Health {
     status: &'static str,
+    database: &'static str,
+}
+
+#[derive(Serialize)]
+struct AuthStatus {
+    authenticated: bool,
+}
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    password: String,
 }
 
 #[derive(Serialize)]
@@ -65,28 +88,91 @@ impl IntoResponse for ApiError {
 }
 
 pub async fn serve_default(port: u16) -> Result<(), Error> {
+    let auth = AuthState::from_environment()?;
+    if let Some(path) = std::env::var_os("OCSTATS_PRICING_FILE") {
+        eprintln!(
+            "ocstats: loading pricing catalog from {}",
+            PathBuf::from(path).display()
+        );
+    } else {
+        eprintln!("ocstats: loading embedded pricing catalog");
+    }
     let pricing = PricingCatalog::load_default()?;
-    let extraction = extract_default()?;
-    let mut analytics_store = AnalyticsStore::open_default()?;
+    let source_database = default_database_path()?;
+    eprintln!(
+        "ocstats: opening OpenCode database at {}",
+        source_database.display()
+    );
+    let extraction = crate::extract_from_path(&source_database)?;
+    let analytics_database = default_analytics_path()?;
+    eprintln!(
+        "ocstats: opening analytics database at {}",
+        analytics_database.display()
+    );
+    let mut analytics_store = AnalyticsStore::open(analytics_database)?;
     analytics_store.import(&extraction)?;
     let store = Arc::new(Mutex::new(analytics_store));
     let address = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(address).await?;
-    axum::serve(listener, router(store, pricing)).await?;
+    eprintln!("ocstats: listening on http://{address}");
+    axum::serve(
+        listener,
+        router_with_source(store, pricing, source_database, auth),
+    )
+    .await?;
     Ok(())
 }
 
+#[cfg(test)]
 fn router(store: SharedStore, catalog: PricingCatalog) -> Router {
     router_with_requests(store, catalog, PricingRequests::new("pricing-requests.txt"))
 }
 
+fn router_with_source(
+    store: SharedStore,
+    catalog: PricingCatalog,
+    source_database: PathBuf,
+    auth: AuthState,
+) -> Router {
+    router_with_requests_and_source(
+        store,
+        catalog,
+        PricingRequests::new("pricing-requests.txt"),
+        Some(source_database),
+        auth,
+    )
+}
+
+#[cfg(test)]
 fn router_with_requests(
     store: SharedStore,
     catalog: PricingCatalog,
     pricing_requests: PricingRequests,
 ) -> Router {
-    Router::new()
-        .route("/api/health", get(health))
+    router_with_requests_and_source(
+        store,
+        catalog,
+        pricing_requests,
+        None,
+        AuthState::for_test(),
+    )
+}
+
+fn router_with_requests_and_source(
+    store: SharedStore,
+    catalog: PricingCatalog,
+    pricing_requests: PricingRequests,
+    source_database: Option<PathBuf>,
+    auth: AuthState,
+) -> Router {
+    let state = AppState {
+        store,
+        pricing: catalog,
+        pricing_requests: Arc::new(Mutex::new(pricing_requests)),
+        source_database,
+        auth,
+    };
+    let protected_api = Router::new()
         .route("/api/usage/sessions", get(session_usage))
         .route("/api/usage/models", get(model_usage))
         .route("/api/usage/session", get(session_detail))
@@ -97,14 +183,104 @@ fn router_with_requests(
         .route("/api/pricing", get(pricing_endpoint))
         .route("/api/pricing/request", post(request_pricing))
         .route("/api/import", post(import))
+        .route_layer(middleware::from_fn_with_state(state.clone(), require_auth));
+    Router::new()
+        .route("/api/health", get(health))
+        .route("/api/auth/status", get(auth_status))
+        .route("/api/auth/login", post(login))
+        .route("/api/auth/logout", post(logout))
+        .merge(protected_api)
         .fallback(frontend_asset)
         // The frontend commonly runs from a separate local development origin.
         .layer(CorsLayer::permissive())
-        .with_state(AppState {
-            store,
-            pricing: catalog,
-            pricing_requests: Arc::new(Mutex::new(pricing_requests)),
+        .with_state(state)
+}
+
+impl AuthState {
+    fn from_environment() -> Result<Self, Error> {
+        let password = std::env::var("OCSTATS_PASSWORD")
+            .map_err(|_| Error::Configuration("set OCSTATS_PASSWORD".into()))?;
+        if password.is_empty() {
+            return Err(Error::Configuration(
+                "OCSTATS_PASSWORD must not be empty".into(),
+            ));
+        }
+        let secure_cookie = std::env::var("OCSTATS_COOKIE_SECURE")
+            .map(|value| value != "false")
+            .unwrap_or(true);
+        Ok(Self {
+            session_token: format!("{:x}", Sha256::digest(password.as_bytes())),
+            secure_cookie,
         })
+    }
+
+    #[cfg(test)]
+    fn for_test() -> Self {
+        Self {
+            session_token: "test-session".into(),
+            secure_cookie: false,
+        }
+    }
+}
+
+async fn require_auth(State(state): State<AppState>, request: Request, next: Next) -> Response {
+    if is_authenticated(request.headers(), &state.auth) {
+        next.run(request).await
+    } else {
+        StatusCode::UNAUTHORIZED.into_response()
+    }
+}
+
+async fn auth_status(State(state): State<AppState>, headers: HeaderMap) -> Json<AuthStatus> {
+    Json(AuthStatus {
+        authenticated: is_authenticated(&headers, &state.auth),
+    })
+}
+
+async fn login(
+    State(state): State<AppState>,
+    Json(request): Json<LoginRequest>,
+) -> Result<(HeaderMap, StatusCode), StatusCode> {
+    if format!("{:x}", Sha256::digest(request.password.as_bytes())) != state.auth.session_token {
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+    Ok((session_cookie(&state.auth, false), StatusCode::NO_CONTENT))
+}
+
+async fn logout(State(state): State<AppState>) -> (HeaderMap, StatusCode) {
+    (session_cookie(&state.auth, true), StatusCode::NO_CONTENT)
+}
+
+fn is_authenticated(headers: &HeaderMap, auth: &AuthState) -> bool {
+    headers
+        .get("cookie")
+        .and_then(|header| header.to_str().ok())
+        .and_then(|cookies| {
+            cookies
+                .split(';')
+                .map(str::trim)
+                .find_map(|cookie| cookie.strip_prefix("ocstats_session="))
+        })
+        .is_some_and(|token| token == auth.session_token)
+}
+
+fn session_cookie(auth: &AuthState, clear: bool) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+    let max_age = if clear {
+        "Max-Age=0"
+    } else {
+        "Max-Age=2592000"
+    };
+    let secure = if auth.secure_cookie { "; Secure" } else { "" };
+    let value = format!(
+        "ocstats_session={}; Path=/; HttpOnly; SameSite=Strict; {max_age}{secure}",
+        auth.session_token
+    );
+    headers.insert(
+        "set-cookie",
+        HeaderValue::from_str(&value).expect("session cookie is valid"),
+    );
+    headers
 }
 
 async fn frontend_asset(uri: Uri) -> Response {
@@ -138,8 +314,21 @@ async fn frontend_asset(uri: Uri) -> Response {
         .into_response()
 }
 
-async fn health() -> Json<Health> {
-    Json(Health { status: "ok" })
+async fn health(State(state): State<AppState>) -> Result<Json<Health>, ApiError> {
+    let database_path = state
+        .source_database
+        .clone()
+        .map(Ok)
+        .unwrap_or_else(default_database_path)
+        .map_err(api_error)?;
+    check_database_path(database_path).map_err(|error| ApiError {
+        status: StatusCode::SERVICE_UNAVAILABLE,
+        error: error.to_string(),
+    })?;
+    Ok(Json(Health {
+        status: "ok",
+        database: "ok",
+    }))
 }
 
 async fn session_usage(
@@ -275,18 +464,25 @@ mod tests {
     #[tokio::test]
     async fn health_endpoint_responds() {
         let directory = tempfile::tempdir().unwrap();
+        let source_path = directory.path().join("opencode.db");
+        rusqlite::Connection::open(&source_path).unwrap();
         let store = Arc::new(Mutex::new(
             AnalyticsStore::open(directory.path().join("analytics.db")).unwrap(),
         ));
-        let response = router(store, PricingCatalog { models: vec![] })
-            .oneshot(
-                Request::builder()
-                    .uri("/api/health")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
+        let response = router_with_source(
+            store,
+            PricingCatalog { models: vec![] },
+            source_path,
+            AuthState::for_test(),
+        )
+        .oneshot(
+            Request::builder()
+                .uri("/api/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
 
@@ -343,10 +539,22 @@ mod tests {
             },
             crate::pricing::PricingRequests::new(directory.path().join("pricing-requests.txt")),
         );
+        let unauthorized = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/api/pricing")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(unauthorized.status(), StatusCode::UNAUTHORIZED);
         let response = app
             .oneshot(
                 Request::builder()
                     .uri("/api/pricing")
+                    .header("cookie", "ocstats_session=test-session")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -374,6 +582,7 @@ mod tests {
                 .oneshot(
                     Request::post("/api/pricing/request")
                         .header("content-type", "application/json")
+                        .header("cookie", "ocstats_session=test-session")
                         .body(Body::from(format!(r#"{{"slug":"{slug}"}}"#)))
                         .unwrap(),
                 )
@@ -401,6 +610,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/usage/sessions?project_id=project-1")
+                    .header("cookie", "ocstats_session=test-session")
                     .body(Body::empty())
                     .unwrap(),
             )
@@ -412,6 +622,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/api/usage/periods?period_ms=0")
+                    .header("cookie", "ocstats_session=test-session")
                     .body(Body::empty())
                     .unwrap(),
             )

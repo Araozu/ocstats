@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
-	import type { SessionUsage } from '$lib/api/ocstats';
+	import { getAuthStatus, login, type SessionUsage } from '$lib/api/ocstats';
 	import {
 		addUsage,
 		emptyUsage,
@@ -19,10 +19,12 @@
 	import { usageQueries } from '$lib/queries/usage';
 	import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
 
-	const projectsQuery = createQuery(usageQueries.projects);
-	const sessionsQuery = createQuery(usageQueries.sessions);
-	const modelsQuery = createQuery(usageQueries.models);
-	const pricingQuery = createQuery(usageQueries.pricing);
+	const authQuery = createQuery(() => ({ queryKey: ['auth'], queryFn: getAuthStatus }));
+	const authenticated = $derived(authQuery.data?.authenticated === true);
+	const projectsQuery = createQuery(() => usageQueries.projects(authenticated));
+	const sessionsQuery = createQuery(() => usageQueries.sessions(authenticated));
+	const modelsQuery = createQuery(() => usageQueries.models(authenticated));
+	const pricingQuery = createQuery(() => usageQueries.pricing(authenticated));
 
 	const projects = $derived(projectsQuery.data ?? []);
 	const sessions = $derived(sessionsQuery.data ?? []);
@@ -42,12 +44,19 @@
 			: null;
 	});
 	const sessionQuery = createQuery(() =>
-		usageQueries.session(selectedSession?.source ?? null, selectedSession?.session_id ?? null)
+		usageQueries.session(
+			selectedSession?.source ?? null,
+			selectedSession?.session_id ?? null,
+			authenticated
+		)
 	);
 	const selectedProject = $derived(
 		projects.find((project) => projectKey(project) === selectedProjectKey) ?? null
 	);
-	const modelUsageQuery = createQuery(() => usageQueries.modelUsage(selectedProject?.id ?? null));
+	const modelUsageQuery = createQuery(() => usageQueries.modelUsage(selectedProject?.id ?? null, authenticated));
+	let password = $state('');
+	let loginError = $state<string | null>(null);
+	let isLoggingIn = $state(false);
 	const visibleSessions = $derived(
 		selectedProject
 			? sessions.filter(
@@ -109,6 +118,20 @@
 			modelUsageQuery.refetch()
 		]);
 	}
+
+	async function submitLogin() {
+		loginError = null;
+		isLoggingIn = true;
+		try {
+			await login(password);
+			password = '';
+			await authQuery.refetch();
+		} catch (error) {
+			loginError = error instanceof Error ? error.message : 'Unable to sign in.';
+		} finally {
+			isLoggingIn = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -117,6 +140,42 @@
 </svelte:head>
 
 <div class="min-h-screen bg-background text-foreground">
+	{#if authQuery.isPending}
+		<div class="grid min-h-screen place-items-center text-sm text-muted-foreground">Checking access...</div>
+	{:else if !authenticated}
+		<main class="grid min-h-screen place-items-center px-5">
+			<form
+				class="w-full max-w-sm space-y-5 rounded-xl border bg-card p-6 shadow-sm"
+				onsubmit={(event) => {
+					event.preventDefault();
+					void submitLogin();
+				}}
+			>
+				<div class="space-y-1.5">
+					<p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">ocstats</p>
+					<h1 class="text-xl font-semibold">Sign in to usage analytics</h1>
+					<p class="text-sm text-muted-foreground">Enter the dashboard password to continue.</p>
+				</div>
+				<label class="grid gap-2 text-sm font-medium">
+					Password
+					<input
+						class="h-10 rounded-md border bg-background px-3 text-sm"
+						type="password"
+						bind:value={password}
+						autocomplete="current-password"
+					/>
+				</label>
+				{#if loginError}<p class="text-sm text-destructive">{loginError}</p>{/if}
+				<button
+					class="h-10 w-full rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground disabled:opacity-50"
+					type="submit"
+					disabled={isLoggingIn || !password}
+				>
+					{isLoggingIn ? 'Signing in...' : 'Sign in'}
+				</button>
+			</form>
+		</main>
+	{:else}
 	<div
 		class="grid min-h-screen {projectsCollapsed
 			? 'lg:grid-cols-[3.5rem_19rem_minmax(0,1fr)]'
@@ -176,4 +235,5 @@
 			</div>
 		</main>
 	</div>
+	{/if}
 </div>
