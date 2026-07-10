@@ -1,5 +1,4 @@
 <script lang="ts">
-	import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
 	import type { SessionUsage } from '$lib/api/ocstats';
 	import { Badge } from '$lib/components/ui/badge';
 	import { getModelPricingContext } from '$lib/model-pricing';
@@ -25,9 +24,24 @@
 	const pricedSessions = $derived(
 		sessions.map((session) => ({ session, cost: $pricingStore.totalCost(session.models) }))
 	);
+	let navigation: HTMLElement;
+
+	function moveFocus(event: KeyboardEvent, index: number) {
+		if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
+		event.preventDefault();
+		const options = navigation.querySelectorAll<HTMLButtonElement>('[data-session-option]');
+		const nextIndex =
+			event.key === 'Home'
+				? 0
+				: event.key === 'End'
+					? options.length - 1
+					: Math.max(0, Math.min(options.length - 1, index + (event.key === 'ArrowDown' ? 1 : -1)));
+		options[nextIndex]?.focus();
+	}
 </script>
 
 <aside
+	bind:this={navigation}
 	class="flex flex-col border-b bg-background lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-hidden lg:border-r lg:border-b-0"
 >
 	<div class="flex h-16 items-center justify-between border-b px-4">
@@ -41,23 +55,27 @@
 	</div>
 	<div class="border-b p-3">
 		<button
-			class="w-full rounded-md px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted {selectedSessionKey ===
+			data-session-option
+			class="w-full rounded-md px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 {selectedSessionKey ===
 			null
-				? 'bg-muted font-medium'
+				? 'bg-primary/15 font-medium text-foreground'
 				: 'text-muted-foreground'}"
 			onclick={onOverview}
+			onkeydown={(event) => moveFocus(event, 0)}
 		>
 			Overview
 		</button>
 	</div>
 	<div class="max-h-72 min-h-0 overflow-y-auto p-3 lg:flex-1 lg:max-h-none">
 		<div class="space-y-1">
-			{#each pricedSessions as { session, cost } (sessionKey(session.source, session.session_id))}<button
-					class="w-full rounded-md border border-transparent px-2.5 py-2.5 text-left transition-colors hover:bg-muted {selectedSessionKey ===
+			{#each pricedSessions as { session, cost }, index (sessionKey(session.source, session.session_id))}<button
+					data-session-option
+					class="w-full rounded-md border border-transparent px-2.5 py-2.5 text-left transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/50 {selectedSessionKey ===
 					sessionKey(session.source, session.session_id)
-						? 'border-border bg-muted'
+						? 'border-primary/30 bg-primary/15 shadow-sm'
 						: ''}"
 					onclick={() => onSelect(session)}
+					onkeydown={(event) => moveFocus(event, index + 1)}
 					><p class="truncate text-xs font-medium">{session.title || 'Untitled session'}</p>
 					<div
 						class="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"
@@ -67,9 +85,13 @@
 						>
 					</div></button
 				>{:else}{#if isLoading}<div
-						class="flex items-center gap-2 px-2 py-3 text-xs text-muted-foreground"
+						class="space-y-2 px-2 py-1"
+						aria-label="Loading sessions"
+						aria-busy="true"
 					>
-						<CircleNotchIcon class="animate-spin" size={14} /> Loading sessions
+						{#each Array.from({ length: 5 }, (_, index) => index) as index (index)}<div
+								class="h-12 animate-pulse rounded-md bg-muted"
+							></div>{/each}
 					</div>{:else}<p class="px-2 py-3 text-xs text-muted-foreground">
 						No sessions in this project.
 					</p>{/if}{/each}

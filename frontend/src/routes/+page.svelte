@@ -11,12 +11,12 @@
 		sessionKey
 	} from '$lib/components/dashboard/format';
 	import Overview from '$lib/components/dashboard/overview.svelte';
+	import DashboardSkeleton from '$lib/components/dashboard/dashboard-skeleton.svelte';
 	import SessionDetail from '$lib/components/dashboard/session-detail.svelte';
 	import ProjectSidebar from '$lib/components/dashboard/project-sidebar.svelte';
 	import SessionSidebar from '$lib/components/dashboard/session-sidebar.svelte';
 	import { setModelPricingContext } from '$lib/model-pricing';
 	import { usageQueries } from '$lib/queries/usage';
-	import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
 	import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
 
 	const projectsQuery = createQuery(usageQueries.projects);
@@ -158,12 +158,8 @@
 						</div>
 					</div>
 				{/if}
-				{#if selectedSession && sessionQuery.isPending}
-					<div
-						class="flex min-h-64 items-center justify-center gap-2 text-sm text-muted-foreground"
-					>
-						<CircleNotchIcon class="animate-spin" size={17} /> Loading session details...
-					</div>
+				{#if sessionsQuery.isPending || (selectedSession && sessionQuery.isPending)}
+					<DashboardSkeleton rows={selectedSession ? 6 : 4} />
 				{:else if sessionQuery.data}
 					<SessionDetail session={sessionQuery.data} />
 				{:else}

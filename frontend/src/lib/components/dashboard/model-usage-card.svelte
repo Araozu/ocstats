@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { requestPricing, type ModelUsage, type Usage } from '$lib/api/ocstats';
-	import InfoIcon from 'phosphor-svelte/lib/InfoIcon';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { getModelPricingContext, type PricingRate } from '$lib/model-pricing';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Tabs, TabsList, TabsTrigger } from '$lib/components/ui/tabs';
@@ -12,7 +12,9 @@
 		TableHeader,
 		TableRow
 	} from '$lib/components/ui/table';
-	import { formatCost, formatNumber, formatPrice } from './format';
+	import ModelPricingTooltip from './model-pricing-tooltip.svelte';
+	import UsageCost from './usage-cost.svelte';
+	import { formatCost, formatNumber } from './format';
 
 	let {
 		models,
@@ -24,7 +26,7 @@
 		description?: string;
 	} = $props();
 	const pricingStore = getModelPricingContext();
-	const requestedPricing = new Set<string>();
+	const requestedPricing = new SvelteSet<string>();
 	let grouping = $state('provider');
 
 	function addUsage(left: Usage, right: Usage): Usage {
@@ -62,7 +64,7 @@
 			return models.map((model) => ({ model, pricingModels: [model] }));
 		}
 
-		const grouped = new Map<string, { model: ModelUsage; pricingModels: ModelUsage[] }>();
+		const grouped = new SvelteMap<string, { model: ModelUsage; pricingModels: ModelUsage[] }>();
 		for (const model of models) {
 			const existing = grouped.get(model.model_id);
 			if (existing) {
@@ -111,42 +113,13 @@
 			</TableHeader>
 			<TableBody>
 				{#each modelRows as { model, pricingModels } (`${grouping}:${model.provider_id}:${model.model_id}:${model.variant ?? ''}`)}
-					{@const modelPricing =
-						pricingModels.length === 1 ? $pricingStore.find(pricingModels[0]) : undefined}
 					<TableRow>
 						<TableCell class="pl-5">
 							<div class="flex items-center gap-1.5">
 								<p class="text-xs font-medium">{model.model_id}</p>
-								<button
-									type="button"
-									class="group relative inline-flex border-0 bg-transparent p-0 text-left"
-									aria-label="Show model pricing"
-								>
-									<InfoIcon size={13} class="text-muted-foreground" />
-									<span
-										role="dialog"
-										class="pointer-events-none invisible absolute left-full top-1/2 z-50 ml-2 w-48 -translate-y-1/2 rounded-md bg-popover p-3 text-popover-foreground opacity-0 shadow-md ring-1 ring-foreground/10 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
-									>
-										<p class="font-medium">Price per 1M tokens</p>
-										<div class="mt-2 space-y-1 text-[11px]">
-											<div class="flex justify-between gap-4">
-												<span>Input</span><span>{formatPrice(modelPricing?.input)}</span>
-											</div>
-											<div class="flex justify-between gap-4">
-												<span>Cached read</span><span>{formatPrice(modelPricing?.cached_read)}</span
-												>
-											</div>
-											<div class="flex justify-between gap-4">
-												<span>Cached write</span><span
-													>{formatPrice(modelPricing?.cached_write)}</span
-												>
-											</div>
-											<div class="flex justify-between gap-4">
-												<span>Output</span><span>{formatPrice(modelPricing?.output)}</span>
-											</div>
-										</div>
-									</span>
-								</button>
+								<ModelPricingTooltip
+									model={pricingModels.length === 1 ? pricingModels[0] : undefined}
+								/>
 							</div>
 							<p class="text-[11px] text-muted-foreground">
 								{grouping === 'provider'
@@ -154,24 +127,24 @@
 									: 'All providers'}
 							</p>
 						</TableCell>
-						<TableCell>
-							<p>{formatNumber(model.usage.input_tokens)}</p>
-							<p class="text-[11px] text-muted-foreground">
-								{formatCost(modelsCost(pricingModels, 'input'))}
-							</p>
-						</TableCell>
-						<TableCell>
-							<p>{formatNumber(model.usage.cache_read_tokens)}</p>
-							<p class="text-[11px] text-muted-foreground">
-								{formatCost(modelsCost(pricingModels, 'cached_read'))}
-							</p>
-						</TableCell>
-						<TableCell class="pr-5">
-							<p>{formatNumber(model.usage.output_tokens)}</p>
-							<p class="text-[11px] text-muted-foreground">
-								{formatCost(modelsCost(pricingModels, 'output'))}
-							</p>
-						</TableCell>
+						<TableCell
+							><UsageCost
+								tokens={model.usage.input_tokens}
+								cost={modelsCost(pricingModels, 'input')}
+							/></TableCell
+						>
+						<TableCell
+							><UsageCost
+								tokens={model.usage.cache_read_tokens}
+								cost={modelsCost(pricingModels, 'cached_read')}
+							/></TableCell
+						>
+						<TableCell class="pr-5"
+							><UsageCost
+								tokens={model.usage.output_tokens}
+								cost={modelsCost(pricingModels, 'output')}
+							/></TableCell
+						>
 						<TableCell class="pr-5 text-right text-xs font-medium">
 							<p>{formatNumber(model.usage.total_tokens)}</p>
 							<p class="text-[11px] text-muted-foreground">
