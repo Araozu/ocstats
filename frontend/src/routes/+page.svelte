@@ -20,6 +20,7 @@
 	const projectsQuery = createQuery(usageQueries.projects);
 	const sessionsQuery = createQuery(usageQueries.sessions);
 	const modelsQuery = createQuery(usageQueries.models);
+	const pricingQuery = createQuery(usageQueries.pricing);
 
 	let selectedProjectKey = $state('all');
 	let selectedSession = $state<SessionUsage | null>(null);
@@ -30,6 +31,7 @@
 	const projects = $derived(projectsQuery.data ?? []);
 	const sessions = $derived(sessionsQuery.data ?? []);
 	const models = $derived(modelsQuery.data ?? []);
+	const pricing = $derived(pricingQuery.data?.models ?? []);
 	const selectedProject = $derived(
 		projects.find((project) => projectKey(project) === selectedProjectKey) ?? null
 	);
@@ -49,10 +51,17 @@
 		sessionsQuery.dataUpdatedAt ? new Date(sessionsQuery.dataUpdatedAt) : null
 	);
 	const error = $derived(
-		projectsQuery.error ?? sessionsQuery.error ?? modelsQuery.error ?? sessionQuery.error
+		projectsQuery.error ??
+			sessionsQuery.error ??
+			modelsQuery.error ??
+			pricingQuery.error ??
+			sessionQuery.error
 	);
 	const isRefreshing = $derived(
-		projectsQuery.isFetching || sessionsQuery.isFetching || modelsQuery.isFetching
+		projectsQuery.isFetching ||
+			sessionsQuery.isFetching ||
+			modelsQuery.isFetching ||
+			pricingQuery.isFetching
 	);
 
 	function selectProject(key: string) {
@@ -65,7 +74,12 @@
 	}
 
 	function refreshDashboard() {
-		void Promise.all([projectsQuery.refetch(), sessionsQuery.refetch(), modelsQuery.refetch()]);
+		void Promise.all([
+			projectsQuery.refetch(),
+			sessionsQuery.refetch(),
+			modelsQuery.refetch(),
+			pricingQuery.refetch()
+		]);
 	}
 </script>
 
@@ -116,7 +130,11 @@
 						<CircleNotchIcon class="animate-spin" size={17} /> Loading session details...
 					</div>
 				{:else if sessionQuery.data}
-					<SessionDetail session={sessionQuery.data} onBack={() => (selectedSession = null)} />
+					<SessionDetail
+						session={sessionQuery.data}
+						{pricing}
+						onBack={() => (selectedSession = null)}
+					/>
 				{:else}
 					<Overview
 						{projectName}

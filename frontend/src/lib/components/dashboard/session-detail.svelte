@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SessionDetail } from '$lib/api/ocstats';
+	import type { ModelPricing, SessionDetail } from '$lib/api/ocstats';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
@@ -11,9 +11,34 @@
 		TableHeader,
 		TableRow
 	} from '$lib/components/ui/table';
-	import { formatCost, formatNumber, shortId } from './format';
+	import { formatCost, formatNumber, formatPrice, shortId } from './format';
 
-	let { session, onBack }: { session: SessionDetail; onBack: () => void } = $props();
+	let {
+		session,
+		pricing,
+		onBack
+	}: { session: SessionDetail; pricing: ModelPricing[]; onBack: () => void } = $props();
+
+	function findPricing(provider: string, slug: string) {
+		return pricing.find((item) => item.provider === provider && item.slug === slug);
+	}
+
+	function metricCost(kind: 'input' | 'cached_read' | 'reasoning' | 'output') {
+		return session.models.reduce((total, model) => {
+			const modelPricing = findPricing(model.provider_id, model.model_id);
+			if (!modelPricing) return total;
+
+			const tokens =
+				kind === 'cached_read' ? model.usage.cache_read_tokens : model.usage[`${kind}_tokens`];
+			const price =
+				kind === 'input'
+					? modelPricing.input
+					: kind === 'cached_read'
+						? modelPricing.cached_read
+						: modelPricing.output;
+			return total + (price == null ? 0 : (tokens * price) / 1_000_000);
+		}, 0);
+	}
 </script>
 
 <div class="space-y-7">
@@ -35,15 +60,19 @@
 		<Badge variant="secondary">{session.source_kind}</Badge>
 	</div>
 	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-		{#each [{ label: 'Input tokens', value: session.usage.input_tokens }, { label: 'Cached tokens', value: session.usage.cache_read_tokens }, { label: 'Reasoning', value: session.usage.reasoning_tokens }, { label: 'Output tokens', value: session.usage.output_tokens }, { label: 'Total cost', value: formatCost(session.usage.cost) }] as metric (metric.label)}<Card
-				size="sm"
-				><CardContent class="p-4"
-					><p class="text-xs text-muted-foreground">{metric.label}</p>
+		{#each [{ label: 'Input tokens', value: session.usage.input_tokens, cost: metricCost('input') }, { label: 'Cached tokens', value: session.usage.cache_read_tokens, cost: metricCost('cached_read') }, { label: 'Reasoning', value: session.usage.reasoning_tokens, cost: metricCost('reasoning') }, { label: 'Output tokens', value: session.usage.output_tokens, cost: metricCost('output') }, { label: 'Total cost', value: formatCost(session.usage.cost) }] as metric (metric.label)}
+			<Card size="sm">
+				<CardContent class="p-4">
+					<p class="text-xs text-muted-foreground">{metric.label}</p>
 					<p class="mt-2 text-2xl font-semibold tracking-tight">
 						{typeof metric.value === 'string' ? metric.value : formatNumber(metric.value)}
-					</p></CardContent
-				></Card
-			>{/each}
+					</p>
+				</CardContent>
+				{#if metric.cost !== undefined}
+					<p class="px-4 pb-4 text-xs text-muted-foreground">{formatCost(metric.cost)}</p>
+				{/if}
+			</Card>
+		{/each}
 	</section>
 	<Card
 		><CardHeader
@@ -57,7 +86,11 @@
 					><TableRow
 						><TableHead class="pl-5">Model</TableHead><TableHead>Input</TableHead><TableHead
 							>Cached</TableHead
-						><TableHead>Reasoning</TableHead><TableHead class="pr-5">Output</TableHead></TableRow
+						><TableHead>Reasoning</TableHead><TableHead>Output</TableHead><TableHead
+							>Input price</TableHead
+						><TableHead>Cache write</TableHead><TableHead>Cache read</TableHead><TableHead
+							class="pr-5">Output price</TableHead
+						></TableRow
 					></TableHeader
 				><TableBody
 					>{#each session.models as model (model.provider_id + model.model_id + model.variant)}<TableRow
@@ -69,10 +102,22 @@
 							><TableCell>{formatNumber(model.usage.input_tokens)}</TableCell><TableCell
 								>{formatNumber(model.usage.cache_read_tokens)}</TableCell
 							><TableCell>{formatNumber(model.usage.reasoning_tokens)}</TableCell><TableCell
-								class="pr-5">{formatNumber(model.usage.output_tokens)}</TableCell
+								>{formatNumber(model.usage.output_tokens)}</TableCell
+							><TableCell
+								>{formatPrice(findPricing(model.provider_id, model.model_id)?.input)}</TableCell
+							><TableCell
+								>{formatPrice(
+									findPricing(model.provider_id, model.model_id)?.cached_write
+								)}</TableCell
+							><TableCell
+								>{formatPrice(
+									findPricing(model.provider_id, model.model_id)?.cached_read
+								)}</TableCell
+							><TableCell class="pr-5"
+								>{formatPrice(findPricing(model.provider_id, model.model_id)?.output)}</TableCell
 							></TableRow
 						>{:else}<TableRow
-							><TableCell colspan={5} class="h-24 text-center text-muted-foreground"
+							><TableCell colspan={9} class="h-24 text-center text-muted-foreground"
 								>No model usage records.</TableCell
 							></TableRow
 						>{/each}</TableBody
