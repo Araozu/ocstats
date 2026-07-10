@@ -47,9 +47,11 @@ derive rows from both the usage models and `$pricingStore.find(model)`, as `mode
 does.
 
 Session lists follow the same rule. The session usage response includes its model usage records, so
-the second sidebar derives each session's cost from `$pricingStore.cost()` rather than reading the
+the second sidebar derives each session's cost from `$pricingStore.totalCost()` rather than reading the
 raw session cost. If any model or rate is unavailable, the sidebar displays `—` until pricing is
 available (or when the catalog has no matching price).
+
+The session table and total-cost metric in the overview use the same reactive session/model totals.
 
 The store snapshot returns `undefined` for an unmatched model and `null` when a cost cannot be
 calculated. Callers must preserve that distinction until display time instead of substituting a

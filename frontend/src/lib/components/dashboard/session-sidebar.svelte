@@ -23,25 +23,7 @@
 	const pricingStore = getModelPricingContext();
 
 	const pricedSessions = $derived(
-		sessions.map((session) => {
-			let cost = 0;
-			let hasPrice = session.models.length > 0;
-
-			for (const model of session.models) {
-				for (const [tokens, rate] of [
-					[model.usage.input_tokens, 'input'],
-					[model.usage.cache_read_tokens, 'cached_read'],
-					[model.usage.output_tokens, 'output']
-				] as const) {
-					if (tokens === 0) continue;
-					const modelCost = $pricingStore.cost(model, tokens, rate);
-					if (modelCost == null) hasPrice = false;
-					else cost += modelCost;
-				}
-			}
-
-			return { session, cost: hasPrice ? cost : null };
-		})
+		sessions.map((session) => ({ session, cost: $pricingStore.totalCost(session.models) }))
 	);
 </script>
 

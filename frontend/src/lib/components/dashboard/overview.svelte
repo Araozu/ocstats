@@ -7,6 +7,7 @@
 	import type { ModelUsage, SessionUsage, Usage } from '$lib/api/ocstats';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import { getModelPricingContext } from '$lib/model-pricing';
 	import ModelUsageCard from './model-usage-card.svelte';
 	import {
 		Table,
@@ -35,6 +36,11 @@
 		isLoading?: boolean;
 		onSessionSelect: (session: SessionUsage) => void;
 	} = $props();
+	const pricingStore = getModelPricingContext();
+	const pricedSessions = $derived(
+		sessions.map((session) => ({ session, cost: $pricingStore.totalCost(session.models) }))
+	);
+	const totalCost = $derived($pricingStore.totalCost(modelUsage));
 	const billedTokens = $derived(
 		totals.input_tokens + totals.cache_read_tokens + totals.output_tokens
 	);
@@ -54,7 +60,7 @@
 		<Badge variant="outline">{sessions.length} sessions</Badge>
 	</section>
 	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-		{#each [{ label: 'Total cost', value: formatCost(totals.cost), detail: 'Across this selection', icon: CoinsIcon }, { label: 'Total tokens', value: formatNumber(totals.total_tokens), detail: 'All reported tokens', icon: HashIcon }, { label: 'Sessions', value: formatNumber(sessions.length), detail: 'Recorded conversations', icon: LightningIcon }, { label: 'Models', value: formatNumber(modelCount), detail: 'Available models', icon: TrendUpIcon }] as metric (metric.label)}
+		{#each [{ label: 'Total cost', value: formatCost(totalCost), detail: 'Across this selection', icon: CoinsIcon }, { label: 'Total tokens', value: formatNumber(totals.total_tokens), detail: 'All reported tokens', icon: HashIcon }, { label: 'Sessions', value: formatNumber(sessions.length), detail: 'Recorded conversations', icon: LightningIcon }, { label: 'Models', value: formatNumber(modelCount), detail: 'Available models', icon: TrendUpIcon }] as metric (metric.label)}
 			<Card size="sm"
 				><CardContent class="flex items-start justify-between p-5"
 					><div>
@@ -88,7 +94,7 @@
 							><TableHead class="pr-5 text-right">Cost</TableHead></TableRow
 						></TableHeader
 					><TableBody
-						>{#each sessions.slice(0, 12) as session (sessionKey(session.source, session.session_id))}<TableRow
+						>{#each pricedSessions.slice(0, 12) as { session, cost } (sessionKey(session.source, session.session_id))}<TableRow
 								class="cursor-pointer"
 								onclick={() => onSessionSelect(session)}
 								><TableCell class="pl-5"
@@ -100,7 +106,7 @@
 									</p></TableCell
 								><TableCell><Badge variant="secondary">{session.source_kind}</Badge></TableCell
 								><TableCell>{formatNumber(session.usage.total_tokens)}</TableCell><TableCell
-									class="pr-5 text-right font-medium">{formatCost(session.usage.cost)}</TableCell
+									class="pr-5 text-right font-medium">{formatCost(cost)}</TableCell
 								></TableRow
 							>{:else}<TableRow
 								><TableCell colspan={4} class="h-28 text-center text-muted-foreground"

@@ -1,6 +1,6 @@
 import { getContext, setContext } from 'svelte';
 import { derived, writable, type Readable } from 'svelte/store';
-import type { Model, ModelPricing } from '$lib/api/ocstats';
+import type { Model, ModelPricing, ModelUsage } from '$lib/api/ocstats';
 
 export type PricingRate = 'input' | 'cached_read' | 'cached_write' | 'output';
 
@@ -9,6 +9,7 @@ type PricedModel = Pick<Model, 'provider_id' | 'model_id'>;
 export type ModelPricingSnapshot = {
 	find(model: PricedModel): ModelPricing | undefined;
 	cost(model: PricedModel, tokens: number, rate: PricingRate): number | null;
+	totalCost(models: ModelUsage[]): number | null;
 };
 
 export type ModelPricingStore = Readable<ModelPricingSnapshot> & {
@@ -37,12 +38,35 @@ function createSnapshot(pricing: ModelPricing[]): ModelPricingSnapshot {
 		);
 	}
 
+	function thisCost(model: PricedModel, tokens: number, rate: PricingRate) {
+		const price = find(model)?.[rate];
+		return price == null ? null : (tokens * price) / 1_000_000;
+	}
+
+	function totalCost(models: ModelUsage[]) {
+		if (models.length === 0) return null;
+		let total = 0;
+		for (const model of models) {
+			for (const [tokens, rate] of [
+				[model.usage.input_tokens, 'input'],
+				[model.usage.cache_read_tokens, 'cached_read'],
+				[model.usage.output_tokens, 'output']
+			] as const) {
+				if (tokens === 0) continue;
+				const modelCost = thisCost(model, tokens, rate);
+				if (modelCost == null) return null;
+				total += modelCost;
+			}
+		}
+		return total;
+	}
+
 	return {
 		find,
 		cost(model, tokens, rate) {
-			const price = find(model)?.[rate];
-			return price == null ? null : (tokens * price) / 1_000_000;
-		}
+			return thisCost(model, tokens, rate);
+		},
+		totalCost
 	};
 }
 
