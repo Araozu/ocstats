@@ -7,6 +7,7 @@ App to track/see/query AI usage in opencode
 
 - use pnpm
 - use shadcn components
+- use tanstack query
 - **only** use color tokens from the main css file
 - you may add new color tokens only when the existing ones dont fit
 
