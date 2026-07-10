@@ -4,19 +4,19 @@
 	import { type VariantProps, tv } from 'tailwind-variants';
 
 	export const buttonVariants = tv({
-		base: "focus-visible:border-ring focus-visible:ring-ring/35 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium tracking-[-0.01em] focus-visible:ring-2 active:not-aria-[haspopup]:translate-y-px active:not-aria-[haspopup]:shadow-none aria-invalid:ring-2 [&_svg:not([class*='size-'])]:size-4 group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap shadow-sm shadow-foreground/10 transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+		base: "focus-visible:border-ring focus-visible:ring-ring/35 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-md border border-transparent bg-clip-padding text-xs/relaxed font-medium tracking-[-0.01em] focus-visible:ring-2 active:not-aria-[haspopup]:translate-y-px active:not-aria-[haspopup]:shadow-none aria-invalid:ring-2 [&_svg:not([class*='size-'])]:size-4 group/button inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-all outline-none select-none disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0",
 		variants: {
 			variant: {
 				default:
-					'bg-primary text-primary-foreground hover:bg-primary/85 hover:shadow-md hover:shadow-primary/20',
+					'border-primary/80 bg-[linear-gradient(to_bottom,color-mix(in_oklch,var(--primary)_88%,var(--primary-foreground)),var(--primary))] text-primary-foreground ring-1 ring-inset ring-primary-foreground/20 hover:brightness-105',
 				outline:
-					'border-border bg-card/70 hover:bg-card hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground',
+					'border-border bg-[linear-gradient(to_bottom,color-mix(in_oklch,var(--card)_92%,var(--card-foreground)),var(--card))] text-foreground ring-1 ring-inset ring-card-foreground/5 hover:brightness-98 aria-expanded:bg-muted aria-expanded:text-foreground',
 				secondary:
-					'bg-secondary/80 text-secondary-foreground hover:bg-secondary aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
+					'border-secondary bg-[linear-gradient(to_bottom,color-mix(in_oklch,var(--secondary)_88%,var(--secondary-foreground)),var(--secondary))] text-secondary-foreground ring-1 ring-inset ring-secondary-foreground/10 hover:brightness-98 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground',
 				ghost:
-					'hover:bg-muted hover:text-foreground dark:hover:bg-muted/50 aria-expanded:bg-muted aria-expanded:text-foreground',
+					'hover:border-border hover:bg-[linear-gradient(to_bottom,color-mix(in_oklch,var(--muted)_88%,var(--background)),var(--muted))] hover:text-foreground hover:ring-1 hover:ring-inset hover:ring-muted-foreground/10 aria-expanded:bg-muted aria-expanded:text-foreground',
 				destructive:
-					'bg-destructive/10 hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 dark:bg-destructive/20 text-destructive focus-visible:border-destructive/40 dark:hover:bg-destructive/30',
+					'border-destructive/30 bg-[linear-gradient(to_bottom,color-mix(in_oklch,var(--destructive)_18%,var(--background)),color-mix(in_oklch,var(--destructive)_10%,var(--background)))] text-destructive ring-1 ring-inset ring-destructive/10 hover:brightness-98 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 focus-visible:border-destructive/40',
 				link: 'text-primary underline-offset-4 hover:underline'
 			},
 			size: {
