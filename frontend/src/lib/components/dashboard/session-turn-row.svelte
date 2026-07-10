@@ -15,6 +15,7 @@
 		for (const [tokens, rate] of [
 			[turn.usage.input_tokens, 'input'],
 			[turn.usage.cache_read_tokens, 'cached_read'],
+			[turn.usage.cache_write_tokens, 'cached_write'],
 			[turn.usage.output_tokens, 'output']
 		] as const) {
 			const cost = $pricingStore.cost(model, tokens, rate);
@@ -53,6 +54,12 @@
 		><UsageCost
 			tokens={turn.usage.cache_read_tokens}
 			cost={model ? $pricingStore.cost(model, turn.usage.cache_read_tokens, 'cached_read') : null}
+		/></TableCell
+	>
+	<TableCell class="hidden sm:table-cell"
+		><UsageCost
+			tokens={turn.usage.cache_write_tokens}
+			cost={model ? $pricingStore.cost(model, turn.usage.cache_write_tokens, 'cached_write') : null}
 		/></TableCell
 	>
 	<TableCell

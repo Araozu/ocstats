@@ -29,6 +29,7 @@
 		for (const [tokens, rate] of [
 			[turn.usage.input_tokens, 'input'],
 			[turn.usage.cache_read_tokens, 'cached_read'],
+			[turn.usage.cache_write_tokens, 'cached_write'],
 			[turn.usage.output_tokens, 'output']
 		] as const) {
 			const cost = $pricingStore.cost(turn.model, tokens, rate);
@@ -66,8 +67,10 @@
 				><TableRow
 					><TableHead class="hidden pl-5 sm:table-cell">Turn</TableHead><TableHead>Model</TableHead
 					><TableHead class="hidden sm:table-cell">Activity</TableHead><TableHead>Input</TableHead
-					><TableHead class="hidden sm:table-cell">Cached</TableHead><TableHead>Output</TableHead
-					><TableHead class="pr-5 text-right">Pricing</TableHead></TableRow
+					><TableHead class="hidden sm:table-cell">Cache read</TableHead><TableHead
+						class="hidden sm:table-cell">Cache write</TableHead
+					><TableHead>Output</TableHead><TableHead class="pr-5 text-right">Pricing</TableHead
+					></TableRow
 				></TableHeader
 			>
 			<TableBody>
@@ -83,7 +86,7 @@
 						/>{/if}
 					<SessionTurnRow {turn} {index} />
 				{:else}<TableRow
-						><TableCell colspan={7} class="h-24 text-center text-muted-foreground"
+						><TableCell colspan={8} class="h-24 text-center text-muted-foreground"
 							>No completed turns.</TableCell
 						></TableRow
 					>{/each}

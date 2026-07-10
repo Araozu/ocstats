@@ -40,6 +40,7 @@ function createSnapshot([pricing, loaded]: [ModelPricing[], boolean]): ModelPric
 	}
 
 	function thisCost(model: PricedModel, tokens: number, rate: PricingRate) {
+		if (tokens === 0) return 0;
 		const price = find(model)?.[rate];
 		return price == null ? null : (tokens * price) / 1_000_000;
 	}
@@ -51,6 +52,7 @@ function createSnapshot([pricing, loaded]: [ModelPricing[], boolean]): ModelPric
 			for (const [tokens, rate] of [
 				[model.usage.input_tokens, 'input'],
 				[model.usage.cache_read_tokens, 'cached_read'],
+				[model.usage.cache_write_tokens, 'cached_write'],
 				[model.usage.output_tokens, 'output']
 			] as const) {
 				if (tokens === 0) continue;

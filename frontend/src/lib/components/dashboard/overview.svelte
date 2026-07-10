@@ -42,7 +42,10 @@
 	);
 	const totalCost = $derived($pricingStore.totalCost(modelUsage));
 	const billedTokens = $derived(
-		totals.input_tokens + totals.cache_read_tokens + totals.output_tokens
+		totals.input_tokens +
+			totals.cache_read_tokens +
+			totals.cache_write_tokens +
+			totals.output_tokens
 	);
 	const percent = (value: number) =>
 		billedTokens ? Math.min(100, (value / billedTokens) * 100) : 0;
@@ -122,7 +125,7 @@
 				><CardTitle>Token mix</CardTitle>
 				<p class="mt-1 text-xs text-muted-foreground">Billable usage composition.</p></CardHeader
 			><CardContent class="space-y-5"
-				>{#each [{ label: 'Input tokens', value: totals.input_tokens, color: 'bg-foreground' }, { label: 'Cached tokens', value: totals.cache_read_tokens, color: 'bg-primary' }, { label: 'Output tokens', value: totals.output_tokens, color: 'bg-muted-foreground' }] as item (item.label)}<div
+				>{#each [{ label: 'Input tokens', value: totals.input_tokens, color: 'bg-foreground' }, { label: 'Cache read tokens', value: totals.cache_read_tokens, color: 'bg-primary' }, { label: 'Cache write tokens', value: totals.cache_write_tokens, color: 'bg-accent-foreground' }, { label: 'Output tokens', value: totals.output_tokens, color: 'bg-muted-foreground' }] as item (item.label)}<div
 					>
 						<div class="mb-2 flex justify-between text-xs">
 							<span>{item.label}</span><span class="text-muted-foreground"

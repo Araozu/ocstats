@@ -6,10 +6,11 @@ use std::{
 use axum::{
     Json, Router,
     extract::{Query, State},
-    http::StatusCode,
+    http::{StatusCode, Uri},
     response::{IntoResponse, Response},
     routing::{get, post},
 };
+use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 use tower_http::cors::CorsLayer;
 
@@ -20,6 +21,10 @@ use crate::{
 };
 
 type SharedStore = Arc<Mutex<AnalyticsStore>>;
+
+#[derive(RustEmbed)]
+#[folder = "frontend/build/"]
+struct FrontendAssets;
 
 #[derive(Clone)]
 struct AppState {
@@ -92,6 +97,7 @@ fn router_with_requests(
         .route("/api/pricing", get(pricing_endpoint))
         .route("/api/pricing/request", post(request_pricing))
         .route("/api/import", post(import))
+        .fallback(frontend_asset)
         // The frontend commonly runs from a separate local development origin.
         .layer(CorsLayer::permissive())
         .with_state(AppState {
@@ -99,6 +105,37 @@ fn router_with_requests(
             pricing: catalog,
             pricing_requests: Arc::new(Mutex::new(pricing_requests)),
         })
+}
+
+async fn frontend_asset(uri: Uri) -> Response {
+    if uri.path() == "/api" || uri.path().starts_with("/api/") {
+        return StatusCode::NOT_FOUND.into_response();
+    }
+
+    let requested_path = uri.path().trim_start_matches('/');
+    let requested_path = if requested_path.is_empty() {
+        "index.html"
+    } else {
+        requested_path
+    };
+    let (asset_path, asset) = match FrontendAssets::get(requested_path) {
+        Some(asset) => (requested_path, asset),
+        None => match FrontendAssets::get("index.html") {
+            Some(asset) => ("index.html", asset),
+            None => return StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+        },
+    };
+
+    (
+        [(
+            "content-type",
+            mime_guess::from_path(asset_path)
+                .first_or_octet_stream()
+                .as_ref(),
+        )],
+        asset.data.into_owned(),
+    )
+        .into_response()
 }
 
 async fn health() -> Json<Health> {
@@ -251,6 +288,39 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn frontend_fallback_serves_the_spa_without_catching_api_routes() {
+        let directory = tempfile::tempdir().unwrap();
+        let store = Arc::new(Mutex::new(
+            AnalyticsStore::open(directory.path().join("analytics.db")).unwrap(),
+        ));
+        let app = router(store, PricingCatalog { models: vec![] });
+
+        let frontend_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/dashboard")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(frontend_response.status(), StatusCode::OK);
+        assert_eq!(frontend_response.headers()["content-type"], "text/html");
+
+        let api_response = app
+            .oneshot(
+                Request::builder()
+                    .uri("/api/missing")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(api_response.status(), StatusCode::NOT_FOUND);
     }
 
     #[tokio::test]

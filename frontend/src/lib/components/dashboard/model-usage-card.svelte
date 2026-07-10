@@ -106,7 +106,8 @@
 				<TableRow>
 					<TableHead class="pl-5">Model</TableHead>
 					<TableHead>Input</TableHead>
-					<TableHead>Cached</TableHead>
+					<TableHead>Cache read</TableHead>
+					<TableHead>Cache write</TableHead>
 					<TableHead>Output</TableHead>
 					<TableHead class="pr-5 text-right">Total</TableHead>
 				</TableRow>
@@ -139,6 +140,12 @@
 								cost={modelsCost(pricingModels, 'cached_read')}
 							/></TableCell
 						>
+						<TableCell
+							><UsageCost
+								tokens={model.usage.cache_write_tokens}
+								cost={modelsCost(pricingModels, 'cached_write')}
+							/></TableCell
+						>
 						<TableCell class="pr-5"
 							><UsageCost
 								tokens={model.usage.output_tokens}
@@ -154,7 +161,7 @@
 					</TableRow>
 				{:else}
 					<TableRow>
-						<TableCell colspan={5} class="h-24 text-center text-muted-foreground">
+						<TableCell colspan={6} class="h-24 text-center text-muted-foreground">
 							No model usage records.
 						</TableCell>
 					</TableRow>
