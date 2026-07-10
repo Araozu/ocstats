@@ -1,12 +1,14 @@
 //! Read-only extraction of OpenCode's internal SQLite usage records.
 
 mod analytics;
+mod pricing;
 mod server;
 
 pub use analytics::{
     AnalyticsStore, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, ProjectSummary,
     Reconciliation, SessionDetail, SessionUsage, UsageFilter,
 };
+pub use pricing::{ModelPricing, PricingCatalog};
 pub use server::serve_default;
 
 use std::{
@@ -69,6 +71,8 @@ pub enum Error {
     IncompatibleSchema(String),
     #[error("filesystem error: {0}")]
     Io(#[from] std::io::Error),
+    #[error("could not parse pricing file: {0}")]
+    PricingParse(#[from] serde_yaml::Error),
     #[error("token count exceeds SQLite's signed integer range: {0}")]
     TokenCount(u64),
     #[error("aggregation period must be greater than zero")]
