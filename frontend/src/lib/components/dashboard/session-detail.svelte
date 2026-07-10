@@ -43,6 +43,10 @@
 			return total + (price == null ? 0 : (tokens * price) / 1_000_000);
 		}, 0);
 	}
+
+	const totalCost = $derived(
+		metricCost('input') + metricCost('cached_read') + metricCost('reasoning') + metricCost('output')
+	);
 </script>
 
 <div class="space-y-7">
@@ -63,8 +67,8 @@
 		</div>
 		<Badge variant="secondary">{session.source_kind}</Badge>
 	</div>
-	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-		{#each [{ label: 'Input tokens', value: session.usage.input_tokens, cost: metricCost('input') }, { label: 'Cached tokens', value: session.usage.cache_read_tokens, cost: metricCost('cached_read') }, { label: 'Reasoning', value: session.usage.reasoning_tokens, cost: metricCost('reasoning') }, { label: 'Output tokens', value: session.usage.output_tokens, cost: metricCost('output') }, { label: 'Total cost', value: formatCost(session.usage.cost) }] as metric (metric.label)}
+	<section class="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+		{#each [{ label: 'Input tokens', value: session.usage.input_tokens, cost: metricCost('input') }, { label: 'Cached tokens', value: session.usage.cache_read_tokens, cost: metricCost('cached_read') }, { label: 'Output tokens', value: session.usage.output_tokens, cost: metricCost('output') }, { label: 'Total cost', value: formatCost(totalCost) }] as metric (metric.label)}
 			<Card size="sm">
 				<CardContent class="p-4">
 					<p class="text-xs text-muted-foreground">{metric.label}</p>
@@ -84,43 +88,47 @@
 			<p class="mt-1 text-xs text-muted-foreground">
 				Token usage grouped by model from assistant messages.
 			</p></CardHeader
-		><CardContent class="p-0"
-			><Table
-				><TableHeader
-					><TableRow
-						><TableHead class="pl-5">Model</TableHead><TableHead>Input</TableHead><TableHead
-							>Cached</TableHead
-						><TableHead>Reasoning</TableHead><TableHead>Output</TableHead><TableHead
-							>Input price</TableHead
-						><TableHead>Cache write</TableHead><TableHead>Cache read</TableHead><TableHead
-							class="pr-5">Output price</TableHead
-						></TableRow
-					></TableHeader
+		><CardContent class="p-0">
+			<Table>
+				<TableHeader>
+					<TableRow>
+						<TableHead class="pl-5">Model</TableHead>
+						<TableHead>Input</TableHead>
+						<TableHead>Cached</TableHead>
+						<TableHead>Output</TableHead><TableHead>Input price</TableHead>
+						<TableHead>Cache write</TableHead>
+						<TableHead>Cache read</TableHead>
+						<TableHead class="pr-5">Output price</TableHead>
+					</TableRow></TableHeader
 				><TableBody
-					>{#each session.models as model (model.provider_id + model.model_id + model.variant)}<TableRow
-							><TableCell class="pl-5"
+					>{#each session.models as model (model.provider_id + model.model_id + model.variant)}
+						<TableRow>
+							<TableCell class="pl-5"
 								><p class="text-xs font-medium">{model.model_id}</p>
 								<p class="text-[11px] text-muted-foreground">
 									{model.provider_id}{model.variant ? ` · ${model.variant}` : ''}
-								</p></TableCell
-							><TableCell>{formatNumber(model.usage.input_tokens)}</TableCell><TableCell
-								>{formatNumber(model.usage.cache_read_tokens)}</TableCell
-							><TableCell>{formatNumber(model.usage.reasoning_tokens)}</TableCell><TableCell
-								>{formatNumber(model.usage.output_tokens)}</TableCell
-							><TableCell
+								</p>
+							</TableCell>
+							<TableCell>{formatNumber(model.usage.input_tokens)}</TableCell>
+							<TableCell>{formatNumber(model.usage.cache_read_tokens)}</TableCell>
+							<TableCell>{formatNumber(model.usage.output_tokens)}</TableCell>
+							<TableCell
 								>{formatPrice(findPricing(model.provider_id, model.model_id)?.input)}</TableCell
-							><TableCell
+							>
+							<TableCell
 								>{formatPrice(
 									findPricing(model.provider_id, model.model_id)?.cached_write
 								)}</TableCell
-							><TableCell
+							>
+							<TableCell
 								>{formatPrice(
 									findPricing(model.provider_id, model.model_id)?.cached_read
 								)}</TableCell
-							><TableCell class="pr-5"
+							>
+							<TableCell class="pr-5"
 								>{formatPrice(findPricing(model.provider_id, model.model_id)?.output)}</TableCell
-							></TableRow
-						>{:else}<TableRow
+							>
+						</TableRow>{:else}<TableRow
 							><TableCell colspan={9} class="h-24 text-center text-muted-foreground"
 								>No model usage records.</TableCell
 							></TableRow
