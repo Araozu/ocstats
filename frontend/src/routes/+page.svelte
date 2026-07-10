@@ -11,7 +11,8 @@
 	} from '$lib/components/dashboard/format';
 	import Overview from '$lib/components/dashboard/overview.svelte';
 	import SessionDetail from '$lib/components/dashboard/session-detail.svelte';
-	import Sidebar from '$lib/components/dashboard/sidebar.svelte';
+	import ProjectSidebar from '$lib/components/dashboard/project-sidebar.svelte';
+	import SessionSidebar from '$lib/components/dashboard/session-sidebar.svelte';
 	import { usageQueries } from '$lib/queries/usage';
 	import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
 	import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
@@ -74,17 +75,16 @@
 </svelte:head>
 
 <div class="min-h-screen bg-background text-foreground">
-	<div class="grid min-h-screen lg:grid-cols-[17rem_minmax(0,1fr)]">
-		<Sidebar
-			{projects}
+	<div class="grid min-h-screen lg:grid-cols-[16rem_19rem_minmax(0,1fr)]">
+		<ProjectSidebar {projects} {selectedProjectKey} onSelect={selectProject} />
+		<SessionSidebar
 			sessions={visibleSessions}
-			{selectedProjectKey}
+			{projectName}
 			selectedSessionKey={selectedSession
 				? sessionKey(selectedSession.source, selectedSession.session_id)
 				: null}
 			isLoading={sessionsQuery.isPending}
-			onProjectSelect={selectProject}
-			onSessionSelect={selectSession}
+			onSelect={selectSession}
 		/>
 		<main class="min-w-0">
 			<DashboardHeader

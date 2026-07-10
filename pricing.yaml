@@ -1,0 +1,98 @@
+# Standard paid API prices in USD per 1,000,000 tokens.
+# null means the provider does not publish that cache operation for the model.
+models:
+  # OpenAI: newest text API models
+  - provider: openai
+    slug: gpt-5.5
+    input: 5.0
+    cached_write: null
+    cached_read: 0.5
+    output: 30.0
+  - provider: openai
+    slug: gpt-5.5-pro
+    input: 30.0
+    cached_write: null
+    cached_read: null
+    output: 180.0
+  - provider: openai
+    slug: gpt-5.4
+    input: 2.5
+    cached_write: null
+    cached_read: 0.25
+    output: 15.0
+  - provider: openai
+    slug: gpt-5.4-pro
+    input: 30.0
+    cached_write: null
+    cached_read: null
+    output: 180.0
+  - provider: openai
+    slug: gpt-5.3-codex
+    input: 1.75
+    cached_write: null
+    cached_read: 0.175
+    output: 14.0
+
+  # Anthropic: newest Claude API models
+  - provider: anthropic
+    slug: claude-fable-5
+    input: 10.0
+    cached_write: 12.5
+    cached_read: 1.0
+    output: 50.0
+  - provider: anthropic
+    slug: claude-mythos-5
+    input: 10.0
+    cached_write: 12.5
+    cached_read: 1.0
+    output: 50.0
+  - provider: anthropic
+    slug: claude-opus-4-8
+    input: 5.0
+    cached_write: 6.25
+    cached_read: 0.5
+    output: 25.0
+  - provider: anthropic
+    slug: claude-opus-4-7
+    input: 5.0
+    cached_write: 6.25
+    cached_read: 0.5
+    output: 25.0
+  - provider: anthropic
+    slug: claude-opus-4-6
+    input: 5.0
+    cached_write: 6.25
+    cached_read: 0.5
+    output: 25.0
+
+  # Google: newest text-capable Gemini API models
+  - provider: google
+    slug: gemini-3.5-flash
+    input: 1.5
+    cached_write: null
+    cached_read: 0.15
+    output: 9.0
+  - provider: google
+    slug: gemini-3.1-pro-preview
+    input: 2.0
+    cached_write: null
+    cached_read: 0.2
+    output: 12.0
+  - provider: google
+    slug: gemini-3.1-flash-lite
+    input: 0.25
+    cached_write: null
+    cached_read: 0.025
+    output: 1.5
+  - provider: google
+    slug: gemini-3-flash-preview
+    input: 0.5
+    cached_write: null
+    cached_read: 0.05
+    output: 3.0
+  - provider: google
+    slug: gemini-2.5-pro
+    input: 1.25
+    cached_write: null
+    cached_read: 0.125
+    output: 10.0
