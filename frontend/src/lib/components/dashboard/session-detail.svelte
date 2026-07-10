@@ -53,6 +53,21 @@
 		}
 		return total;
 	}
+
+	function userMessageCost(startIndex: number) {
+		const message = session.turns[startIndex]?.user_message;
+		if (!message) return null;
+
+		let total = 0;
+		for (let index = startIndex; index < session.turns.length; index += 1) {
+			const turn = session.turns[index];
+			if (turn.user_message !== message) break;
+			const cost = turnCost(turn);
+			if (cost == null) return null;
+			total += cost;
+		}
+		return total;
+	}
 </script>
 
 <div class="space-y-7">
@@ -110,11 +125,19 @@
 							? expandedMessages.includes(turn.user_message)
 							: false}
 						{#if turn.user_message && (index === 0 || session.turns[index - 1].user_message !== turn.user_message)}
-							<TableRow class="bg-muted/40 hover:bg-muted/40">
+							<TableRow class="bg-primary/15 hover:bg-primary/25">
 								<TableCell colspan={7} class="px-5 py-3">
-									<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-										User message
-									</p>
+									<div class="flex items-center justify-between gap-4">
+										<p
+											class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground"
+										>
+											User message
+										</p>
+										<p class="text-[11px] text-muted-foreground">
+											<span class="font-medium uppercase tracking-wide">Summary</span>
+											{formatCost(userMessageCost(index))}
+										</p>
+									</div>
 									<p
 										class="mt-1 whitespace-pre-wrap text-xs {messageExpanded ? '' : 'line-clamp-3'}"
 									>

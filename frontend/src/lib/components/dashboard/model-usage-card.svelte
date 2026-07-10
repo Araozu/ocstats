@@ -57,6 +57,7 @@
 					<TableHead>Input</TableHead>
 					<TableHead>Cached</TableHead>
 					<TableHead>Output</TableHead>
+					<TableHead class="pr-5 text-right">Total</TableHead>
 				</TableRow>
 			</TableHeader>
 			<TableBody>
@@ -120,10 +121,16 @@
 								{formatCost($pricingStore.cost(model, model.usage.output_tokens, 'output'))}
 							</p>
 						</TableCell>
+						<TableCell class="pr-5 text-right text-xs font-medium">
+							<p>{formatNumber(model.usage.total_tokens)}</p>
+							<p class="text-[11px] text-muted-foreground">
+								{formatCost($pricingStore.totalCost([model]))}
+							</p>
+						</TableCell>
 					</TableRow>
 				{:else}
 					<TableRow>
-						<TableCell colspan={4} class="h-24 text-center text-muted-foreground">
+						<TableCell colspan={5} class="h-24 text-center text-muted-foreground">
 							No model usage records.
 						</TableCell>
 					</TableRow>

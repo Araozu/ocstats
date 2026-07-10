@@ -94,6 +94,12 @@ models:
     cached_write: 3.75
     cached_read: 0.3
     output: 15.0
+  - provider: anthropic
+    slug: claude-sonnet-4-6
+    input: 3.0
+    cached_write: 3.75
+    cached_read: 0.3
+    output: 15.0
 
   # Google: newest text-capable Gemini API models
   - provider: google
@@ -132,6 +138,12 @@ models:
     cached_write: null
     cached_read: 0.125
     output: 10.0
+  - provider: google
+    slug: gemini-3-pro
+    input: 2.0
+    cached_write: null
+    cached_read: 0.2
+    output: 12.0
 
   # Moonshot: Kimi API models
   - provider: moonshot
@@ -140,6 +152,18 @@ models:
     cached_write: null
     cached_read: 0.16
     output: 4.0
+  - provider: moonshot
+    slug: k2p7
+    input: 0.95
+    cached_write: null
+    cached_read: 0.16
+    output: 4.0
+  - provider: moonshot
+    slug: kimi-k2.5
+    input: 0.6
+    cached_write: null
+    cached_read: 0.15
+    output: 3.0
 
   # MiniMax: standard paid API prices
   - provider: minimax
@@ -147,4 +171,10 @@ models:
     input: 0.3
     cached_write: 0.375
     cached_read: 0.03
+    output: 1.2
+  - provider: minimax
+    slug: minimax-m2.7
+    input: 0.3
+    cached_write: 0.375
+    cached_read: 0.06
     output: 1.2
