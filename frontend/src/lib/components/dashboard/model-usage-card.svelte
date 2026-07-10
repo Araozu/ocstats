@@ -32,13 +32,13 @@
 	});
 </script>
 
-<Card>
+<Card class="!overflow-visible">
 	<CardHeader>
 		<CardTitle>{title}</CardTitle>
 		<p class="mt-1 text-xs text-muted-foreground">{description}</p>
 	</CardHeader>
 	<CardContent class="p-0">
-		<Table>
+		<Table containerClass="!overflow-visible">
 			<TableHeader>
 				<TableRow>
 					<TableHead class="pl-5">Model</TableHead>
@@ -61,7 +61,7 @@
 									<InfoIcon size={13} class="text-muted-foreground" />
 									<span
 										role="dialog"
-										class="pointer-events-none invisible absolute left-0 top-full z-50 mt-2 w-48 rounded-md bg-popover p-3 text-popover-foreground opacity-0 shadow-md ring-1 ring-foreground/10 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+										class="pointer-events-none invisible absolute left-full top-1/2 z-50 ml-2 w-48 -translate-y-1/2 rounded-md bg-popover p-3 text-popover-foreground opacity-0 shadow-md ring-1 ring-foreground/10 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
 									>
 										<p class="font-medium">Price per 1M tokens</p>
 										<div class="mt-2 space-y-1 text-[11px]">

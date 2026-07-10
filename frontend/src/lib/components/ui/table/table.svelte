@@ -6,11 +6,12 @@
 		ref = $bindable(null),
 		class: className,
 		children,
+		containerClass = '',
 		...restProps
-	}: WithElementRef<HTMLTableAttributes> = $props();
+	}: WithElementRef<HTMLTableAttributes> & { containerClass?: string } = $props();
 </script>
 
-<div data-slot="table-container" class="relative w-full overflow-x-auto">
+<div data-slot="table-container" class={cn('relative w-full overflow-x-auto', containerClass)}>
 	<table
 		bind:this={ref}
 		data-slot="table"
