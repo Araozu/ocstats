@@ -1,6 +1,7 @@
 <script lang="ts">
-	import type { ModelPricing, ModelUsage } from '$lib/api/ocstats';
+	import type { ModelUsage } from '$lib/api/ocstats';
 	import InfoIcon from 'phosphor-svelte/lib/InfoIcon';
+	import { getModelPricingContext } from '$lib/model-pricing';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import {
 		Table,
@@ -14,49 +15,21 @@
 
 	let {
 		models,
-		pricing,
 		title = 'Models used',
 		description = 'Token usage grouped by model from assistant messages.'
 	}: {
 		models: ModelUsage[];
-		pricing: ModelPricing[];
 		title?: string;
 		description?: string;
 	} = $props();
+	const pricingStore = getModelPricingContext();
 
 	const pricedModels = $derived.by(() => {
-		const pricingByProviderAndSlug = new Map(
-			pricing.map((item) => [`${item.provider}:${item.slug}`, item])
-		);
-		const pricingBySlug = new Map(pricing.map((item) => [item.slug, item]));
-
 		return models.map((model) => ({
 			model,
-			pricing:
-				pricingByProviderAndSlug.get(`${model.provider_id}:${model.model_id}`) ??
-				pricingBySlug.get(model.model_id)
+			pricing: $pricingStore.find(model)
 		}));
 	});
-
-	$effect(() => {
-		if (!import.meta.env.DEV) return;
-
-		console.info('[model-usage-card] pricing lookups', {
-			pricingCount: pricing.length,
-			lookups: pricedModels.map(({ model, pricing: modelPricing }) => ({
-				provider: model.provider_id,
-				model: model.model_id,
-				matched: modelPricing ? `${modelPricing.provider}:${modelPricing.slug}` : null,
-				input: modelPricing?.input ?? null,
-				cachedRead: modelPricing?.cached_read ?? null,
-				output: modelPricing?.output ?? null
-			}))
-		});
-	});
-
-	function tokenCost(tokens: number, price: number | null | undefined) {
-		return price == null ? null : (tokens * price) / 1_000_000;
-	}
 </script>
 
 <Card>
@@ -118,19 +91,21 @@
 						<TableCell>
 							<p>{formatNumber(model.usage.input_tokens)}</p>
 							<p class="text-[11px] text-muted-foreground">
-								{formatCost(tokenCost(model.usage.input_tokens, modelPricing?.input))}
+								{formatCost($pricingStore.cost(model, model.usage.input_tokens, 'input'))}
 							</p>
 						</TableCell>
 						<TableCell>
 							<p>{formatNumber(model.usage.cache_read_tokens)}</p>
 							<p class="text-[11px] text-muted-foreground">
-								{formatCost(tokenCost(model.usage.cache_read_tokens, modelPricing?.cached_read))}
+								{formatCost(
+									$pricingStore.cost(model, model.usage.cache_read_tokens, 'cached_read')
+								)}
 							</p>
 						</TableCell>
 						<TableCell class="pr-5">
 							<p>{formatNumber(model.usage.output_tokens)}</p>
 							<p class="text-[11px] text-muted-foreground">
-								{formatCost(tokenCost(model.usage.output_tokens, modelPricing?.output))}
+								{formatCost($pricingStore.cost(model, model.usage.output_tokens, 'output'))}
 							</p>
 						</TableCell>
 					</TableRow>

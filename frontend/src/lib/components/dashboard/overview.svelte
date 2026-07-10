@@ -4,7 +4,7 @@
 	import HashIcon from 'phosphor-svelte/lib/HashIcon';
 	import LightningIcon from 'phosphor-svelte/lib/LightningIcon';
 	import TrendUpIcon from 'phosphor-svelte/lib/TrendUpIcon';
-	import type { ModelPricing, ModelUsage, SessionUsage, Usage } from '$lib/api/ocstats';
+	import type { ModelUsage, SessionUsage, Usage } from '$lib/api/ocstats';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import ModelUsageCard from './model-usage-card.svelte';
@@ -24,7 +24,6 @@
 		modelCount,
 		totals,
 		modelUsage,
-		pricing,
 		isLoading = false,
 		onSessionSelect
 	}: {
@@ -33,7 +32,6 @@
 		modelCount: number;
 		totals: Usage;
 		modelUsage: ModelUsage[];
-		pricing: ModelPricing[];
 		isLoading?: boolean;
 		onSessionSelect: (session: SessionUsage) => void;
 	} = $props();
@@ -137,7 +135,6 @@
 	</section>
 	<ModelUsageCard
 		models={modelUsage}
-		{pricing}
 		title="Model usage"
 		description="Usage and catalog prices for this selection"
 	/>

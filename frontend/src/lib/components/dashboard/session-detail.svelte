@@ -1,29 +1,20 @@
 <script lang="ts">
-	import type { ModelPricing, SessionDetail } from '$lib/api/ocstats';
-	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
+	import type { SessionDetail } from '$lib/api/ocstats';
+	import { Card, CardContent } from '$lib/components/ui/card';
+	import { getModelPricingContext, type PricingRate } from '$lib/model-pricing';
 	import ModelUsageCard from './model-usage-card.svelte';
 	import { formatCost, formatNumber, shortId } from './format';
 
-	let { session, pricing }: { session: SessionDetail; pricing: ModelPricing[] } = $props();
-
-	const pricingByModel = $derived(
-		new Map(pricing.map((item) => [`${item.provider}:${item.slug}`, item]))
-	);
+	let { session }: { session: SessionDetail } = $props();
+	const pricingStore = getModelPricingContext();
 
 	function metricCost(kind: 'input' | 'cached_read' | 'reasoning' | 'output') {
 		return session.models.reduce((total, model) => {
-			const modelPricing = pricingByModel.get(`${model.provider_id}:${model.model_id}`);
-			if (!modelPricing) return total;
-
 			const tokens =
 				kind === 'cached_read' ? model.usage.cache_read_tokens : model.usage[`${kind}_tokens`];
-			const price =
-				kind === 'input'
-					? modelPricing.input
-					: kind === 'cached_read'
-						? modelPricing.cached_read
-						: modelPricing.output;
-			return total + (price == null ? 0 : (tokens * price) / 1_000_000);
+			const rate: PricingRate =
+				kind === 'input' ? 'input' : kind === 'cached_read' ? 'cached_read' : 'output';
+			return total + ($pricingStore.cost(model, tokens, rate) ?? 0);
 		}, 0);
 	}
 
@@ -58,5 +49,5 @@
 			</Card>
 		{/each}
 	</section>
-	<ModelUsageCard models={session.models} {pricing} />
+	<ModelUsageCard models={session.models} />
 </div>

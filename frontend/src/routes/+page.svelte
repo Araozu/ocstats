@@ -14,6 +14,7 @@
 	import SessionDetail from '$lib/components/dashboard/session-detail.svelte';
 	import ProjectSidebar from '$lib/components/dashboard/project-sidebar.svelte';
 	import SessionSidebar from '$lib/components/dashboard/session-sidebar.svelte';
+	import { setModelPricingContext } from '$lib/model-pricing';
 	import { usageQueries } from '$lib/queries/usage';
 	import CircleNotchIcon from 'phosphor-svelte/lib/CircleNotchIcon';
 	import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
@@ -27,6 +28,8 @@
 	const sessions = $derived(sessionsQuery.data ?? []);
 	const models = $derived(modelsQuery.data ?? []);
 	const pricing = $derived(pricingQuery.data?.models ?? []);
+	const modelPricing = setModelPricingContext();
+	$effect(() => modelPricing.set(pricing));
 	let projectsCollapsed = $state(false);
 	const selectedProjectKey = $derived(page.url.searchParams.get('project') ?? 'all');
 	const selectedSession = $derived.by(() => {
@@ -162,7 +165,7 @@
 						<CircleNotchIcon class="animate-spin" size={17} /> Loading session details...
 					</div>
 				{:else if sessionQuery.data}
-					<SessionDetail session={sessionQuery.data} {pricing} />
+					<SessionDetail session={sessionQuery.data} />
 				{:else}
 					<Overview
 						{projectName}
@@ -170,7 +173,6 @@
 						modelCount={models.length}
 						{totals}
 						modelUsage={modelUsageQuery.data ?? []}
-						{pricing}
 						isLoading={sessionsQuery.isPending}
 						onSessionSelect={selectSession}
 					/>
