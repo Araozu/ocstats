@@ -18,18 +18,18 @@
 		projects,
 		selectedProjectKey,
 		lastUpdated,
-		isRefreshing = false,
+		isImporting = false,
 		collapsed = false,
-		onRefresh,
+		onImport,
 		onSelect,
 		onToggle
 	}: {
 		projects: Project[];
 		selectedProjectKey: string;
 		lastUpdated: Date | null;
-		isRefreshing?: boolean;
+		isImporting?: boolean;
 		collapsed?: boolean;
-		onRefresh: () => void;
+		onImport: () => void;
 		onSelect: (key: string) => void;
 		onToggle: () => void;
 	} = $props();
@@ -109,12 +109,12 @@
 					variant="outline"
 					size="sm"
 					class="min-w-0 flex-1 {collapsed ? 'size-9 flex-none px-0' : ''}"
-					onclick={onRefresh}
-					disabled={isRefreshing}
-					title="Refresh data"
+					onclick={onImport}
+					disabled={isImporting}
+					title="Import OpenCode data"
 				>
-					<ArrowsClockwiseIcon class={isRefreshing ? 'animate-spin' : ''} />
-					<span class:hidden={collapsed}>Refresh</span>
+					<ArrowsClockwiseIcon class={isImporting ? 'animate-spin' : ''} />
+					<span class:hidden={collapsed}>Import</span>
 				</Button>
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger

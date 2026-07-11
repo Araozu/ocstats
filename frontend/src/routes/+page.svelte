@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { getAuthStatus, login, type SessionUsage } from '$lib/api/ocstats';
+	import { getAuthStatus, importData, login, type SessionUsage } from '$lib/api/ocstats';
 	import {
 		addUsage,
 		emptyUsage,
@@ -53,10 +53,14 @@
 	const selectedProject = $derived(
 		projects.find((project) => projectKey(project) === selectedProjectKey) ?? null
 	);
-	const modelUsageQuery = createQuery(() => usageQueries.modelUsage(selectedProject?.id ?? null, authenticated));
+	const modelUsageQuery = createQuery(() =>
+		usageQueries.modelUsage(selectedProject?.id ?? null, authenticated)
+	);
 	let password = $state('');
 	let loginError = $state<string | null>(null);
 	let isLoggingIn = $state(false);
+	let importError = $state<Error | null>(null);
+	let isImporting = $state(false);
 	const visibleSessions = $derived(
 		selectedProject
 			? sessions.filter(
@@ -73,21 +77,14 @@
 		sessionsQuery.dataUpdatedAt ? new Date(sessionsQuery.dataUpdatedAt) : null
 	);
 	const error = $derived(
-		projectsQuery.error ??
+		importError ??
+			projectsQuery.error ??
 			sessionsQuery.error ??
 			modelsQuery.error ??
 			pricingQuery.error ??
 			modelUsageQuery.error ??
 			sessionQuery.error
 	);
-	const isRefreshing = $derived(
-		projectsQuery.isFetching ||
-			sessionsQuery.isFetching ||
-			modelsQuery.isFetching ||
-			pricingQuery.isFetching ||
-			modelUsageQuery.isFetching
-	);
-
 	function updateSelection(updates: Record<string, string | null>) {
 		const url = new URL(page.url);
 		for (const [key, value] of Object.entries(updates)) {
@@ -109,14 +106,23 @@
 		});
 	}
 
-	function refreshDashboard() {
-		void Promise.all([
-			projectsQuery.refetch(),
-			sessionsQuery.refetch(),
-			modelsQuery.refetch(),
-			pricingQuery.refetch(),
-			modelUsageQuery.refetch()
-		]);
+	async function importDashboard() {
+		importError = null;
+		isImporting = true;
+		try {
+			await importData();
+			await Promise.all([
+				projectsQuery.refetch(),
+				sessionsQuery.refetch(),
+				modelsQuery.refetch(),
+				pricingQuery.refetch(),
+				modelUsageQuery.refetch()
+			]);
+		} catch (error) {
+			importError = error instanceof Error ? error : new Error('Unable to import OpenCode data.');
+		} finally {
+			isImporting = false;
+		}
 	}
 
 	async function submitLogin() {
@@ -141,7 +147,9 @@
 
 <div class="min-h-screen bg-background text-foreground">
 	{#if authQuery.isPending}
-		<div class="grid min-h-screen place-items-center text-sm text-muted-foreground">Checking access...</div>
+		<div class="grid min-h-screen place-items-center text-sm text-muted-foreground">
+			Checking access...
+		</div>
 	{:else if !authenticated}
 		<main class="grid min-h-screen place-items-center px-5">
 			<form
@@ -176,64 +184,64 @@
 			</form>
 		</main>
 	{:else}
-	<div
-		class="grid min-h-screen {projectsCollapsed
-			? 'lg:grid-cols-[3.5rem_19rem_minmax(0,1fr)]'
-			: 'lg:grid-cols-[16rem_19rem_minmax(0,1fr)]'}"
-	>
-		<ProjectSidebar
-			{projects}
-			{selectedProjectKey}
-			{lastUpdated}
-			{isRefreshing}
-			collapsed={projectsCollapsed}
-			onRefresh={refreshDashboard}
-			onSelect={selectProject}
-			onToggle={() => (projectsCollapsed = !projectsCollapsed)}
-		/>
-		<SessionSidebar
-			sessions={visibleSessions}
-			{projectName}
-			selectedSessionKey={selectedSession
-				? sessionKey(selectedSession.source, selectedSession.session_id)
-				: null}
-			isLoading={sessionsQuery.isPending}
-			onOverview={() => updateSelection({ source: null, session_id: null })}
-			onSelect={selectSession}
-		/>
-		<main class="min-w-0">
-			<div class="mx-auto max-w-7xl space-y-7 px-5 py-4 md:px-8">
-				{#if error}
-					<div
-						class="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm"
-					>
-						<WarningCircleIcon class="mt-0.5 shrink-0 text-destructive" size={18} />
-						<div>
-							<p class="font-medium">Analytics service unavailable</p>
-							<p class="mt-1 text-xs text-muted-foreground">
-								{error.message} Start the Rust server with
-								<code class="rounded bg-muted px-1 py-0.5">ocstats serve</code> and refresh.
-							</p>
+		<div
+			class="grid min-h-screen {projectsCollapsed
+				? 'lg:grid-cols-[3.5rem_19rem_minmax(0,1fr)]'
+				: 'lg:grid-cols-[16rem_19rem_minmax(0,1fr)]'}"
+		>
+			<ProjectSidebar
+				{projects}
+				{selectedProjectKey}
+				{lastUpdated}
+				{isImporting}
+				collapsed={projectsCollapsed}
+				onImport={importDashboard}
+				onSelect={selectProject}
+				onToggle={() => (projectsCollapsed = !projectsCollapsed)}
+			/>
+			<SessionSidebar
+				sessions={visibleSessions}
+				{projectName}
+				selectedSessionKey={selectedSession
+					? sessionKey(selectedSession.source, selectedSession.session_id)
+					: null}
+				isLoading={sessionsQuery.isPending}
+				onOverview={() => updateSelection({ source: null, session_id: null })}
+				onSelect={selectSession}
+			/>
+			<main class="min-w-0">
+				<div class="mx-auto max-w-7xl space-y-7 px-5 py-4 md:px-8">
+					{#if error}
+						<div
+							class="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm"
+						>
+							<WarningCircleIcon class="mt-0.5 shrink-0 text-destructive" size={18} />
+							<div>
+								<p class="font-medium">Analytics service unavailable</p>
+								<p class="mt-1 text-xs text-muted-foreground">
+									{error.message} Start the Rust server with
+									<code class="rounded bg-muted px-1 py-0.5">ocstats serve</code> and refresh.
+								</p>
+							</div>
 						</div>
-					</div>
-				{/if}
-				{#if sessionsQuery.isPending || (selectedSession && sessionQuery.isPending)}
-					<DashboardSkeleton rows={selectedSession ? 6 : 4} />
-				{:else if sessionQuery.data}
-					<SessionDetail session={sessionQuery.data} />
-				{:else}
-					<Overview
-						{projectName}
-						sessions={visibleSessions}
-						modelCount={models.length}
-						{totals}
-						modelUsage={modelUsageQuery.data ?? []}
-						isLoading={sessionsQuery.isPending}
-						onSessionSelect={selectSession}
-					/>
-				{/if}
-			</div>
-		</main>
-	</div>
+					{/if}
+					{#if sessionsQuery.isPending || (selectedSession && sessionQuery.isPending)}
+						<DashboardSkeleton rows={selectedSession ? 6 : 4} />
+					{:else if sessionQuery.data}
+						<SessionDetail session={sessionQuery.data} />
+					{:else}
+						<Overview
+							{projectName}
+							sessions={visibleSessions}
+							modelCount={models.length}
+							{totals}
+							modelUsage={modelUsageQuery.data ?? []}
+							isLoading={sessionsQuery.isPending}
+							onSessionSelect={selectSession}
+						/>
+					{/if}
+				</div>
+			</main>
+		</div>
 	{/if}
 </div>

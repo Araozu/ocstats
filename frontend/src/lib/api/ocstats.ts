@@ -46,6 +46,12 @@ export type ModelPricing = {
 };
 export type PricingCatalog = { models: ModelPricing[] };
 export type AuthStatus = { authenticated: boolean };
+export type ImportSummary = {
+	sessions: number;
+	assistant_messages: number;
+	steps: number;
+	issues: number;
+};
 
 async function get<T>(path: string): Promise<T> {
 	const response = await fetch(`${API_URL}${path}`);
@@ -62,6 +68,12 @@ export const getModelUsage = (projectId?: string) =>
 export const getModels = () => get<Model[]>('/models');
 export const getPricing = () => get<PricingCatalog>('/pricing');
 export const getAuthStatus = () => get<AuthStatus>('/auth/status');
+
+export async function importData(): Promise<ImportSummary> {
+	const response = await fetch(`${API_URL}/import`, { method: 'POST' });
+	if (!response.ok) throw new Error('The analytics service returned an error.');
+	return response.json() as Promise<ImportSummary>;
+}
 
 export async function login(password: string): Promise<void> {
 	const response = await fetch(`${API_URL}/auth/login`, {

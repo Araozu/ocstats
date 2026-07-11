@@ -21,7 +21,7 @@ use crate::pricing::PricingRequests;
 use crate::{
     AnalyticsStore, Error, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, PricingCatalog,
     ProjectSummary, Reconciliation, SessionDetail, SessionUsage, UsageFilter, check_database_path,
-    default_analytics_path, default_database_path, extract_default,
+    default_analytics_path, default_database_path, extract_from_path,
 };
 
 type SharedStore = Arc<Mutex<AnalyticsStore>>;
@@ -103,15 +103,12 @@ pub async fn serve_default(port: u16) -> Result<(), Error> {
         "ocstats: opening OpenCode database at {}",
         source_database.display()
     );
-    let extraction = crate::extract_from_path(&source_database)?;
     let analytics_database = default_analytics_path()?;
     eprintln!(
         "ocstats: opening analytics database at {}",
         analytics_database.display()
     );
-    let mut analytics_store = AnalyticsStore::open(analytics_database)?;
-    analytics_store.import(&extraction)?;
-    let store = Arc::new(Mutex::new(analytics_store));
+    let store = Arc::new(Mutex::new(AnalyticsStore::open(analytics_database)?));
     let address = SocketAddr::from(([0, 0, 0, 0], port));
     let listener = tokio::net::TcpListener::bind(address).await?;
     eprintln!("ocstats: listening on http://{address}");
@@ -416,7 +413,13 @@ async fn import(State(state): State<AppState>) -> Result<Json<ImportSummary>, Ap
 }
 
 fn import_data(state: &AppState) -> Result<ImportSummary, ApiError> {
-    let extraction = extract_default().map_err(api_error)?;
+    let source_database = state
+        .source_database
+        .clone()
+        .map(Ok)
+        .unwrap_or_else(default_database_path)
+        .map_err(api_error)?;
+    let extraction = extract_from_path(source_database).map_err(api_error)?;
     with_store_mut(state, |store| store.import(&extraction))
 }
 
@@ -483,6 +486,50 @@ mod tests {
         )
         .await
         .unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn import_endpoint_imports_the_configured_source_database() {
+        let directory = tempfile::tempdir().unwrap();
+        let source_path = directory.path().join("opencode.db");
+        rusqlite::Connection::open(&source_path)
+            .unwrap()
+            .execute_batch(
+                "CREATE TABLE project (id TEXT, worktree TEXT, name TEXT);
+                 CREATE TABLE session (
+                    id TEXT, project_id TEXT, title TEXT, model TEXT, cost REAL,
+                    tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER,
+                    tokens_cache_read INTEGER, tokens_cache_write INTEGER,
+                    time_created INTEGER, time_updated INTEGER
+                 );
+                 CREATE TABLE message (
+                    id TEXT, session_id TEXT, data TEXT, time_created INTEGER, time_updated INTEGER
+                 );
+                 CREATE TABLE part (
+                    id TEXT, message_id TEXT, session_id TEXT, data TEXT,
+                    time_created INTEGER, time_updated INTEGER
+                 );",
+            )
+            .unwrap();
+        let store = Arc::new(Mutex::new(
+            AnalyticsStore::open(directory.path().join("analytics.db")).unwrap(),
+        ));
+        let response = router_with_source(
+            store,
+            PricingCatalog { models: vec![] },
+            source_path,
+            AuthState::for_test(),
+        )
+        .oneshot(
+            Request::post("/api/import")
+                .header("cookie", "ocstats_session=test-session")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
         assert_eq!(response.status(), StatusCode::OK);
     }
 
