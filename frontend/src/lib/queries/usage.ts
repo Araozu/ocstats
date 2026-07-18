@@ -9,8 +9,10 @@ import {
 } from '$lib/api/ocstats';
 
 export const usageQueries = {
-	projects: (enabled: boolean) => queryOptions({ queryKey: ['projects'], queryFn: getProjects, enabled }),
-	sessions: (enabled: boolean) => queryOptions({ queryKey: ['sessions'], queryFn: getSessions, enabled }),
+	projects: (enabled: boolean) =>
+		queryOptions({ queryKey: ['projects'], queryFn: getProjects, enabled }),
+	sessions: (enabled: boolean) =>
+		queryOptions({ queryKey: ['sessions'], queryFn: getSessions, enabled }),
 	modelUsage: (projectId: string | null, enabled: boolean) =>
 		queryOptions({
 			queryKey: ['model-usage', projectId],
@@ -18,7 +20,8 @@ export const usageQueries = {
 			enabled
 		}),
 	models: (enabled: boolean) => queryOptions({ queryKey: ['models'], queryFn: getModels, enabled }),
-	pricing: (enabled: boolean) => queryOptions({ queryKey: ['pricing'], queryFn: getPricing, enabled }),
+	pricing: (enabled: boolean) =>
+		queryOptions({ queryKey: ['pricing'], queryFn: getPricing, enabled }),
 	session: (source: string | null, sessionId: string | null, enabled: boolean) =>
 		queryOptions({
 			queryKey: ['session', source, sessionId],
