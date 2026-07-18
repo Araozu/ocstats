@@ -35,6 +35,7 @@ export type Turn = {
 	created_at_ms: number;
 	updated_at_ms: number;
 };
+export type TurnText = { turn_id: string; message_id: string; text: string | null };
 export type SessionDetail = SessionUsage & { models: ModelUsage[]; turns: Turn[] };
 export type ModelPricing = {
 	provider: string;
@@ -96,4 +97,9 @@ export async function requestPricing(slug: string): Promise<void> {
 export function getSession(source: string, sessionId: string) {
 	const params = new URLSearchParams({ source, session_id: sessionId });
 	return get<SessionDetail>(`/usage/session?${params}`);
+}
+
+export function getTurnText(source: string, sessionId: string, turnId: string) {
+	const params = new URLSearchParams({ source, session_id: sessionId, turn_id: turnId });
+	return get<TurnText>(`/usage/turn-text?${params}`);
 }

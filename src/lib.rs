@@ -6,7 +6,7 @@ mod server;
 
 pub use analytics::{
     AnalyticsStore, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, ProjectSummary,
-    Reconciliation, SessionDetail, SessionUsage, Turn, UsageFilter,
+    Reconciliation, SessionDetail, SessionUsage, Turn, TurnText, UsageFilter,
 };
 pub use pricing::{ModelPricing, PricingCatalog};
 pub use server::serve_default;
@@ -124,6 +124,7 @@ pub struct AssistantMessage {
     pub parent_id: Option<String>,
     pub model: Model,
     pub usage: Usage,
+    pub text: String,
     pub created_at_ms: i64,
     pub updated_at_ms: i64,
 }
@@ -356,6 +357,7 @@ fn extract_messages(connection: &Connection, result: &mut Extraction) -> Result<
             issue(result, "message", id, "assistant message lacks valid usage");
             continue;
         };
+        let text = message_text(connection, &id)?;
         result.assistant_messages.push(AssistantMessage {
             id,
             session_id,
@@ -365,6 +367,7 @@ fn extract_messages(connection: &Connection, result: &mut Extraction) -> Result<
                 .map(str::to_owned),
             model,
             usage,
+            text,
             created_at_ms,
             updated_at_ms,
         });
@@ -528,5 +531,31 @@ mod tests {
     fn parses_step_usage() {
         let data: Value = serde_json::json!({"cost": 0.2, "tokens": {"total": 10, "input": 2, "output": 3, "reasoning": 1, "cache": {"read": 2, "write": 2}}});
         assert_eq!(usage_from_value(&data).unwrap().total_tokens, Some(10));
+    }
+
+    #[test]
+    fn extracts_ordered_assistant_text_without_non_text_parts() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE project (id TEXT, worktree TEXT, name TEXT);
+                 CREATE TABLE session (id TEXT, project_id TEXT, title TEXT, model TEXT, cost REAL,
+                   tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER,
+                   tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_created INTEGER, time_updated INTEGER);
+                 CREATE TABLE message (id TEXT, session_id TEXT, data TEXT, time_created INTEGER, time_updated INTEGER);
+                 CREATE TABLE part (id TEXT, message_id TEXT, session_id TEXT, data TEXT, time_created INTEGER, time_updated INTEGER);
+                 INSERT INTO project VALUES ('project-1', '/work', 'work');
+                 INSERT INTO session VALUES ('session-1', 'project-1', 'test', NULL, NULL, 0, 0, 0, 0, 0, 1, 2);
+                 INSERT INTO message VALUES ('assistant-1', 'session-1', '{\"role\":\"assistant\",\"providerID\":\"openai\",\"modelID\":\"gpt-5\",\"tokens\":{\"input\":1,\"output\":2,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}', 1, 2);
+                 INSERT INTO part VALUES ('text-2', 'assistant-1', 'session-1', '{\"type\":\"text\",\"text\":\"second\"}', 2, 2);
+                 INSERT INTO part VALUES ('tool-1', 'assistant-1', 'session-1', '{\"type\":\"tool\",\"text\":\"hidden\"}', 3, 3);
+                 INSERT INTO part VALUES ('text-1', 'assistant-1', 'session-1', '{\"type\":\"text\",\"text\":\"first\"}', 1, 1);
+                 INSERT INTO part VALUES ('step-1', 'assistant-1', 'session-1', '{\"type\":\"step-finish\",\"tokens\":{\"input\":1,\"output\":2,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}', 4, 4);",
+            )
+            .unwrap();
+
+        let extraction = extract(&connection, PathBuf::from("/data/opencode.db")).unwrap();
+        assert_eq!(extraction.assistant_messages[0].text, "first\nsecond");
+        assert_eq!(extraction.steps[0].message_id, "assistant-1");
     }
 }

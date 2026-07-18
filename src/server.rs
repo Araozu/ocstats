@@ -20,8 +20,8 @@ use tower_http::cors::CorsLayer;
 use crate::pricing::PricingRequests;
 use crate::{
     AnalyticsStore, Error, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, PricingCatalog,
-    ProjectSummary, Reconciliation, SessionDetail, SessionUsage, UsageFilter, check_database_path,
-    default_analytics_path, default_database_path, extract_from_path,
+    ProjectSummary, Reconciliation, SessionDetail, SessionUsage, TurnText, UsageFilter,
+    check_database_path, default_analytics_path, default_database_path, extract_from_path,
 };
 
 type SharedStore = Arc<Mutex<AnalyticsStore>>;
@@ -56,6 +56,13 @@ struct PeriodQuery {
 struct SessionDetailQuery {
     source: String,
     session_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct TurnTextQuery {
+    source: String,
+    session_id: String,
+    turn_id: String,
 }
 
 #[derive(Serialize)]
@@ -173,6 +180,7 @@ fn router_with_requests_and_source(
         .route("/api/usage/sessions", get(session_usage))
         .route("/api/usage/models", get(model_usage))
         .route("/api/usage/session", get(session_detail))
+        .route("/api/usage/turn-text", get(turn_text))
         .route("/api/usage/periods", get(period_usage))
         .route("/api/reconciliation", get(reconciliation))
         .route("/api/projects", get(projects))
@@ -352,6 +360,19 @@ async fn session_detail(
     detail.map(Json).ok_or(ApiError {
         status: StatusCode::NOT_FOUND,
         error: "session not found".into(),
+    })
+}
+
+async fn turn_text(
+    State(state): State<AppState>,
+    Query(query): Query<TurnTextQuery>,
+) -> Result<Json<TurnText>, ApiError> {
+    let text = with_store(&state, |store| {
+        store.turn_text(&query.source, &query.session_id, &query.turn_id)
+    })?;
+    text.map(Json).ok_or(ApiError {
+        status: StatusCode::NOT_FOUND,
+        error: "turn not found".into(),
     })
 }
 

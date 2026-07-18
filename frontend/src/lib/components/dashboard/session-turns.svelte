@@ -17,10 +17,10 @@
 	const pricingStore = getModelPricingContext();
 	let expandedMessages = $state<string[]>([]);
 
-	function toggleMessage(message: string) {
-		expandedMessages = expandedMessages.includes(message)
-			? expandedMessages.filter((item) => item !== message)
-			: [...expandedMessages, message];
+	function toggleMessage(key: string) {
+		expandedMessages = expandedMessages.includes(key)
+			? expandedMessages.filter((item) => item !== key)
+			: [...expandedMessages, key];
 	}
 
 	function turnCost(turn: Turn) {
@@ -70,7 +70,7 @@
 					><TableHead class="hidden sm:table-cell">Cache read</TableHead><TableHead
 						class="hidden sm:table-cell">Cache write</TableHead
 					><TableHead>Output</TableHead><TableHead class="pr-5 text-right">Pricing</TableHead
-					></TableRow
+					><TableHead>Actions</TableHead></TableRow
 				></TableHeader
 			>
 			<TableBody>
@@ -80,13 +80,14 @@
 						(index === 0 || session.turns[index - 1].user_message !== turn.user_message)}
 					{#if isMessageStart}{@const message = turn.user_message!}<SessionUserMessageRow
 							{message}
+							messageKey={turn.id}
 							cost={userMessageCost(index)}
-							expanded={expandedMessages.includes(message)}
-							onToggle={() => toggleMessage(message)}
+							expanded={expandedMessages.includes(turn.id)}
+							onToggle={() => toggleMessage(turn.id)}
 						/>{/if}
-					<SessionTurnRow {turn} {index} />
+					<SessionTurnRow {turn} {index} source={session.source} sessionId={session.session_id} />
 				{:else}<TableRow
-						><TableCell colspan={8} class="h-24 text-center text-muted-foreground"
+						><TableCell colspan={9} class="h-24 text-center text-muted-foreground"
 							>No completed turns.</TableCell
 						></TableRow
 					>{/each}

@@ -1,12 +1,27 @@
 <script lang="ts">
+	import { createQuery } from '@tanstack/svelte-query';
 	import type { Turn } from '$lib/api/ocstats';
+	import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
+	import ArrowClockwiseIcon from 'phosphor-svelte/lib/ArrowClockwiseIcon';
+	import { usageQueries } from '$lib/queries/usage';
+	import { Button } from '$lib/components/ui/button';
 	import { TableCell, TableRow } from '$lib/components/ui/table';
 	import { getModelPricingContext } from '$lib/model-pricing';
 	import ModelPricingTooltip from './model-pricing-tooltip.svelte';
 	import UsageCost from './usage-cost.svelte';
 	import { formatCost } from './format';
 
-	let { turn, index }: { turn: Turn; index: number } = $props();
+	let {
+		turn,
+		index,
+		source,
+		sessionId
+	}: { turn: Turn; index: number; source: string; sessionId: string } = $props();
+	let requested = $state(false);
+	let expanded = $state(false);
+	const textQuery = createQuery(() => usageQueries.turnText(source, sessionId, turn.id, requested));
+	const detailVisible = $derived(expanded && (textQuery.data !== undefined || textQuery.isError));
+	const detailId = $derived(`turn-text-${turn.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`);
 	const pricingStore = getModelPricingContext();
 	const model = $derived(turn.model);
 	function totalCost() {
@@ -23,6 +38,16 @@
 			total += cost ?? 0;
 		}
 		return total;
+	}
+
+	function activate() {
+		if (requested && textQuery.isPending) return;
+		if (textQuery.isError) {
+			void textQuery.refetch();
+			return;
+		}
+		if (!requested) requested = true;
+		expanded = !expanded;
 	}
 </script>
 
@@ -69,4 +94,44 @@
 		/></TableCell
 	>
 	<TableCell class="pr-5 text-right text-xs font-medium">{formatCost(totalCost())}</TableCell>
+	<TableCell>
+		<Button
+			variant="ghost"
+			size="xs"
+			onclick={activate}
+			disabled={requested && textQuery.isPending}
+			aria-expanded={detailVisible}
+			aria-controls={detailId}
+		>
+			{#if requested && textQuery.isPending}<ArrowClockwiseIcon
+					class="animate-spin"
+					aria-hidden="true"
+				/>Loading{:else}<CaretDownIcon
+					class={detailVisible ? 'rotate-180 transition-transform' : 'transition-transform'}
+					aria-hidden="true"
+				/>{textQuery.isError ? 'Retry' : detailVisible ? 'Hide text' : 'Show text'}{/if}
+		</Button>
+	</TableCell>
 </TableRow>
+{#if detailVisible}<TableRow id={detailId} class="bg-muted/30">
+		<TableCell
+			colspan={9}
+			class="whitespace-pre-wrap break-words px-5 py-3 text-xs"
+			aria-live="polite"
+		>
+			{#if textQuery.isError}<div class="flex items-center gap-2 text-destructive">
+					<span>Unable to load turn text.</span><Button
+						variant="ghost"
+						size="xs"
+						onclick={() => textQuery.refetch()}>Retry</Button
+					>
+				</div>
+			{:else if textQuery.data?.text === null}<span class="text-muted-foreground"
+					>Text is unavailable for this imported turn. Import OpenCode data again.</span
+				>
+			{:else if textQuery.data?.text === ''}<span class="text-muted-foreground"
+					>No text output for this turn.</span
+				>
+			{:else}{textQuery.data?.text}{/if}
+		</TableCell>
+	</TableRow>{/if}

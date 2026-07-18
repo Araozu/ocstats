@@ -59,6 +59,13 @@ pub struct Turn {
     pub updated_at_ms: i64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TurnText {
+    pub turn_id: String,
+    pub message_id: String,
+    pub text: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SessionDetail {
     pub source: String,
@@ -379,6 +386,31 @@ impl AnalyticsStore {
         }))
     }
 
+    pub fn turn_text(
+        &self,
+        source: &str,
+        session_id: &str,
+        turn_id: &str,
+    ) -> Result<Option<TurnText>, Error> {
+        let mut statement = self.connection.prepare(
+            "SELECT cs.id, cs.message_id, am.text
+             FROM completed_step cs
+             JOIN assistant_message am
+               ON am.source = cs.source AND am.id = cs.message_id
+             WHERE cs.source = ?1 AND cs.session_id = ?2 AND cs.id = ?3",
+        )?;
+        statement
+            .query_row(params![source, session_id, turn_id], |row| {
+                Ok(TurnText {
+                    turn_id: row.get(0)?,
+                    message_id: row.get(1)?,
+                    text: row.get(2)?,
+                })
+            })
+            .optional()
+            .map_err(Error::from)
+    }
+
     pub fn period_usage(
         &self,
         filter: &UsageFilter,
@@ -519,8 +551,9 @@ impl AnalyticsStore {
                parent_id TEXT, provider_id TEXT NOT NULL, model_id TEXT NOT NULL, variant TEXT,
                cost REAL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
                reasoning_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_write_tokens INTEGER NOT NULL,
-               total_tokens INTEGER, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL,
-               PRIMARY KEY (source, id)
+                total_tokens INTEGER, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL,
+                text TEXT,
+                PRIMARY KEY (source, id)
              );
              CREATE TABLE IF NOT EXISTS completed_step (
                source TEXT NOT NULL REFERENCES source(path), id TEXT NOT NULL, message_id TEXT NOT NULL, session_id TEXT NOT NULL,
@@ -568,6 +601,7 @@ impl AnalyticsStore {
              LEFT JOIN message_totals mt ON mt.source = s.source AND mt.session_id = s.id;",
         )?;
         ensure_column(&self.connection, "assistant_message", "parent_id", "TEXT")?;
+        ensure_column(&self.connection, "assistant_message", "text", "TEXT")?;
         ensure_column(
             &self.connection,
             "completed_step",
@@ -703,6 +737,7 @@ fn upsert_message(
                 message.model.variant.as_deref(),
             )),
             parent_id: message.parent_id.as_deref(),
+            text: Some(&message.text),
             types: None,
             reason: None,
         },
@@ -745,6 +780,7 @@ fn upsert_step(connection: &Connection, source: &str, step: &CompletedStep) -> R
             updated_at_ms: step.updated_at_ms,
             model: None,
             parent_id: None,
+            text: None,
             types: Some(&step.types),
             reason: step.reason.as_deref(),
         },
@@ -760,6 +796,7 @@ struct UsageRecord<'a> {
     updated_at_ms: i64,
     model: Option<(&'a str, &'a str, Option<&'a str>)>,
     parent_id: Option<&'a str>,
+    text: Option<&'a str>,
     types: Option<&'a Vec<String>>,
     reason: Option<&'a str>,
 }
@@ -786,9 +823,9 @@ fn upsert_usage_record(
         .map(|values| values.join("\u{1f}"))
         .unwrap_or_default();
     let sql = if table == "assistant_message" {
-        "INSERT INTO assistant_message (source, id, session_id, parent_id, provider_id, model_id, variant, cost, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, created_at_ms, updated_at_ms)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)
-         ON CONFLICT(source, id) DO UPDATE SET session_id=excluded.session_id, parent_id=excluded.parent_id, provider_id=excluded.provider_id, model_id=excluded.model_id, variant=excluded.variant, cost=excluded.cost, input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, reasoning_tokens=excluded.reasoning_tokens, cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens, total_tokens=excluded.total_tokens, created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms"
+        "INSERT INTO assistant_message (source, id, session_id, parent_id, provider_id, model_id, variant, cost, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, created_at_ms, updated_at_ms, text)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+         ON CONFLICT(source, id) DO UPDATE SET session_id=excluded.session_id, parent_id=excluded.parent_id, provider_id=excluded.provider_id, model_id=excluded.model_id, variant=excluded.variant, cost=excluded.cost, input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, reasoning_tokens=excluded.reasoning_tokens, cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens, total_tokens=excluded.total_tokens, created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms, text=excluded.text"
     } else {
         "INSERT INTO completed_step (source, id, message_id, session_id, types, reason, cost, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, created_at_ms, updated_at_ms)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
@@ -813,7 +850,8 @@ fn upsert_usage_record(
                 cache_write_tokens,
                 total_tokens,
                 record.created_at_ms,
-                record.updated_at_ms
+                record.updated_at_ms,
+                record.text
             ],
         )?;
     } else {
@@ -925,6 +963,7 @@ mod tests {
                         variant: None,
                     },
                     usage: usage(1.0, 10),
+                    text: "first response".into(),
                     created_at_ms: 1,
                     updated_at_ms: 2,
                 },
@@ -938,6 +977,7 @@ mod tests {
                         variant: None,
                     },
                     usage: usage(2.0, 20),
+                    text: "second response".into(),
                     created_at_ms: 1,
                     updated_at_ms: 2,
                 },

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { createQuery } from '@tanstack/svelte-query';
+	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
 	import { getAuthStatus, importData, login, type SessionUsage } from '$lib/api/ocstats';
 	import {
 		addUsage,
@@ -20,6 +20,7 @@
 	import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
 
 	const authQuery = createQuery(() => ({ queryKey: ['auth'], queryFn: getAuthStatus }));
+	const queryClient = useQueryClient();
 	const authenticated = $derived(authQuery.data?.authenticated === true);
 	const projectsQuery = createQuery(() => usageQueries.projects(authenticated));
 	const sessionsQuery = createQuery(() => usageQueries.sessions(authenticated));
@@ -111,6 +112,7 @@
 		isImporting = true;
 		try {
 			await importData();
+			await queryClient.invalidateQueries({ queryKey: ['turn-text'] });
 			await Promise.all([
 				projectsQuery.refetch(),
 				sessionsQuery.refetch(),

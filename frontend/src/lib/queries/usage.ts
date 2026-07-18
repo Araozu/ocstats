@@ -5,7 +5,8 @@ import {
 	getPricing,
 	getProjects,
 	getSession,
-	getSessions
+	getSessions,
+	getTurnText
 } from '$lib/api/ocstats';
 
 export const usageQueries = {
@@ -27,5 +28,12 @@ export const usageQueries = {
 			queryKey: ['session', source, sessionId],
 			queryFn: () => getSession(source!, sessionId!),
 			enabled: enabled && Boolean(source && sessionId)
+		}),
+	turnText: (source: string, sessionId: string, turnId: string, enabled: boolean) =>
+		queryOptions({
+			queryKey: ['turn-text', source, sessionId, turnId],
+			queryFn: () => getTurnText(source, sessionId, turnId),
+			enabled,
+			staleTime: Infinity
 		})
 };
