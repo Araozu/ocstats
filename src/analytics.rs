@@ -8,10 +8,11 @@ use rusqlite::{Connection, OptionalExtension, Row, params, types::Value as SqlVa
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    AssistantMessage, CompletedStep, Error, Extraction, Session, Usage, default_analytics_path,
+    AssistantMessage, CompletedStep, Error, Extraction, OutputPart, Session, Usage,
+    default_analytics_path,
 };
 
-const EXTRACTOR_SCHEMA_VERSION: u32 = 1;
+const EXTRACTOR_SCHEMA_VERSION: u32 = 2;
 const EXTRACTOR_SCHEMA_SIGNATURE: &str = "project(id,worktree,name);session(id,project_id,title,model,cost,tokens_input,tokens_output,tokens_reasoning,tokens_cache_read,tokens_cache_write,time_created,time_updated);message(id,session_id,data,time_created,time_updated);part(id,message_id,session_id,data,time_created,time_updated)";
 
 /// Application-owned SQLite store populated from read-only OpenCode extractions.
@@ -19,7 +20,7 @@ pub struct AnalyticsStore {
     connection: Connection,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ImportSummary {
     pub sessions: usize,
     pub assistant_messages: usize,
@@ -59,11 +60,11 @@ pub struct Turn {
     pub updated_at_ms: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct TurnText {
     pub turn_id: String,
     pub message_id: String,
-    pub text: Option<String>,
+    pub parts: Option<Vec<OutputPart>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -393,7 +394,7 @@ impl AnalyticsStore {
         turn_id: &str,
     ) -> Result<Option<TurnText>, Error> {
         let mut statement = self.connection.prepare(
-            "SELECT cs.id, cs.message_id, am.text
+            "SELECT cs.id, cs.message_id, am.parts, am.text
              FROM completed_step cs
              JOIN assistant_message am
                ON am.source = cs.source AND am.id = cs.message_id
@@ -401,10 +402,32 @@ impl AnalyticsStore {
         )?;
         statement
             .query_row(params![source, session_id, turn_id], |row| {
+                let raw_parts: Option<String> = row.get(2)?;
+                let legacy_text: Option<String> = row.get(3)?;
+                let parts = raw_parts
+                    .map(|raw| serde_json::from_str(&raw))
+                    .transpose()
+                    .map_err(|error| {
+                        rusqlite::Error::FromSqlConversionFailure(
+                            2,
+                            rusqlite::types::Type::Text,
+                            Box::new(error),
+                        )
+                    })?
+                    .or_else(|| {
+                        legacy_text.map(|text| {
+                            vec![OutputPart {
+                                id: row.get(1).unwrap_or_default(),
+                                part_type: "text".into(),
+                                data: serde_json::json!({"type": "text", "text": text}),
+                                created_at_ms: 0,
+                            }]
+                        })
+                    });
                 Ok(TurnText {
                     turn_id: row.get(0)?,
                     message_id: row.get(1)?,
-                    text: row.get(2)?,
+                    parts,
                 })
             })
             .optional()
@@ -552,7 +575,7 @@ impl AnalyticsStore {
                cost REAL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
                reasoning_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_write_tokens INTEGER NOT NULL,
                 total_tokens INTEGER, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL,
-                text TEXT,
+                text TEXT, parts TEXT,
                 PRIMARY KEY (source, id)
              );
              CREATE TABLE IF NOT EXISTS completed_step (
@@ -560,8 +583,8 @@ impl AnalyticsStore {
                types TEXT NOT NULL DEFAULT '', reason TEXT,
                cost REAL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
                reasoning_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL, cache_write_tokens INTEGER NOT NULL,
-               total_tokens INTEGER, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL,
-               PRIMARY KEY (source, id)
+                total_tokens INTEGER, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL,
+                PRIMARY KEY (source, id)
              );
              CREATE TABLE IF NOT EXISTS parse_issue (
                source TEXT NOT NULL REFERENCES source(path), record_type TEXT NOT NULL, record_id TEXT NOT NULL, reason TEXT NOT NULL,
@@ -602,6 +625,7 @@ impl AnalyticsStore {
         )?;
         ensure_column(&self.connection, "assistant_message", "parent_id", "TEXT")?;
         ensure_column(&self.connection, "assistant_message", "text", "TEXT")?;
+        ensure_column(&self.connection, "assistant_message", "parts", "TEXT")?;
         ensure_column(
             &self.connection,
             "completed_step",
@@ -720,6 +744,9 @@ fn upsert_message(
     source: &str,
     message: &AssistantMessage,
 ) -> Result<(), Error> {
+    let parts = serde_json::to_string(&message.parts).map_err(|error| {
+        Error::Configuration(format!("could not serialize assistant parts: {error}"))
+    })?;
     upsert_usage_record(
         connection,
         "assistant_message",
@@ -738,6 +765,7 @@ fn upsert_message(
             )),
             parent_id: message.parent_id.as_deref(),
             text: Some(&message.text),
+            parts: Some(&parts),
             types: None,
             reason: None,
         },
@@ -781,6 +809,7 @@ fn upsert_step(connection: &Connection, source: &str, step: &CompletedStep) -> R
             model: None,
             parent_id: None,
             text: None,
+            parts: None,
             types: Some(&step.types),
             reason: step.reason.as_deref(),
         },
@@ -797,6 +826,7 @@ struct UsageRecord<'a> {
     model: Option<(&'a str, &'a str, Option<&'a str>)>,
     parent_id: Option<&'a str>,
     text: Option<&'a str>,
+    parts: Option<&'a str>,
     types: Option<&'a Vec<String>>,
     reason: Option<&'a str>,
 }
@@ -823,9 +853,9 @@ fn upsert_usage_record(
         .map(|values| values.join("\u{1f}"))
         .unwrap_or_default();
     let sql = if table == "assistant_message" {
-        "INSERT INTO assistant_message (source, id, session_id, parent_id, provider_id, model_id, variant, cost, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, created_at_ms, updated_at_ms, text)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
-         ON CONFLICT(source, id) DO UPDATE SET session_id=excluded.session_id, parent_id=excluded.parent_id, provider_id=excluded.provider_id, model_id=excluded.model_id, variant=excluded.variant, cost=excluded.cost, input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, reasoning_tokens=excluded.reasoning_tokens, cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens, total_tokens=excluded.total_tokens, created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms, text=excluded.text"
+        "INSERT INTO assistant_message (source, id, session_id, parent_id, provider_id, model_id, variant, cost, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, created_at_ms, updated_at_ms, text, parts)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
+         ON CONFLICT(source, id) DO UPDATE SET session_id=excluded.session_id, parent_id=excluded.parent_id, provider_id=excluded.provider_id, model_id=excluded.model_id, variant=excluded.variant, cost=excluded.cost, input_tokens=excluded.input_tokens, output_tokens=excluded.output_tokens, reasoning_tokens=excluded.reasoning_tokens, cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens, total_tokens=excluded.total_tokens, created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms, text=excluded.text, parts=excluded.parts"
     } else {
         "INSERT INTO completed_step (source, id, message_id, session_id, types, reason, cost, input_tokens, output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, total_tokens, created_at_ms, updated_at_ms)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
@@ -851,7 +881,8 @@ fn upsert_usage_record(
                 total_tokens,
                 record.created_at_ms,
                 record.updated_at_ms,
-                record.text
+                record.text,
+                record.parts
             ],
         )?;
     } else {
@@ -964,6 +995,7 @@ mod tests {
                     },
                     usage: usage(1.0, 10),
                     text: "first response".into(),
+                    parts: vec![],
                     created_at_ms: 1,
                     updated_at_ms: 2,
                 },
@@ -978,6 +1010,7 @@ mod tests {
                     },
                     usage: usage(2.0, 20),
                     text: "second response".into(),
+                    parts: vec![],
                     created_at_ms: 1,
                     updated_at_ms: 2,
                 },
@@ -1005,7 +1038,7 @@ mod tests {
         extraction.steps[0].usage = usage(4.0, 40);
         store.import(&extraction).unwrap();
 
-        assert_eq!(store.source_schema_version(&source).unwrap(), Some(1));
+        assert_eq!(store.source_schema_version(&source).unwrap(), Some(2));
         let detail = store
             .session_detail(&source.to_string_lossy(), "session-steps")
             .unwrap()

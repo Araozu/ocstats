@@ -35,7 +35,13 @@ export type Turn = {
 	created_at_ms: number;
 	updated_at_ms: number;
 };
-export type TurnText = { turn_id: string; message_id: string; text: string | null };
+export type TurnOutputPart = {
+	id: string;
+	part_type: string;
+	data: unknown;
+	created_at_ms: number;
+};
+export type TurnText = { turn_id: string; message_id: string; parts: TurnOutputPart[] | null };
 export type SessionDetail = SessionUsage & { models: ModelUsage[]; turns: Turn[] };
 export type ModelPricing = {
 	provider: string;

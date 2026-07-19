@@ -49,6 +49,18 @@
 		if (!requested) requested = true;
 		expanded = !expanded;
 	}
+
+	function partContent(data: unknown) {
+		if (
+			typeof data === 'object' &&
+			data !== null &&
+			'text' in data &&
+			typeof data.text === 'string'
+		) {
+			return data.text;
+		}
+		return JSON.stringify(data, null, 2);
+	}
 </script>
 
 <TableRow>
@@ -126,12 +138,23 @@
 						onclick={() => textQuery.refetch()}>Retry</Button
 					>
 				</div>
-			{:else if textQuery.data?.text === null}<span class="text-muted-foreground"
-					>Text is unavailable for this imported turn. Import OpenCode data again.</span
+			{:else if textQuery.data?.parts === null}<span class="text-muted-foreground"
+					>Output is unavailable for this imported turn. Import OpenCode data again.</span
 				>
-			{:else if textQuery.data?.text === ''}<span class="text-muted-foreground"
-					>No text output for this turn.</span
+			{:else if textQuery.data?.parts?.length === 0}<span class="text-muted-foreground"
+					>No output for this turn.</span
 				>
-			{:else}{textQuery.data?.text}{/if}
+			{:else}<div class="space-y-3">
+					{#each textQuery.data?.parts ?? [] as part (part.id)}
+						<section>
+							<p
+								class="mb-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground"
+							>
+								{part.part_type}
+							</p>
+							<pre class="whitespace-pre-wrap break-words font-sans">{partContent(part.data)}</pre>
+						</section>
+					{/each}
+				</div>{/if}
 		</TableCell>
 	</TableRow>{/if}

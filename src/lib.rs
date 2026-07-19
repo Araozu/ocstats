@@ -125,8 +125,17 @@ pub struct AssistantMessage {
     pub model: Model,
     pub usage: Usage,
     pub text: String,
+    pub parts: Vec<OutputPart>,
     pub created_at_ms: i64,
     pub updated_at_ms: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OutputPart {
+    pub id: String,
+    pub part_type: String,
+    pub data: Value,
+    pub created_at_ms: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -357,7 +366,13 @@ fn extract_messages(connection: &Connection, result: &mut Extraction) -> Result<
             issue(result, "message", id, "assistant message lacks valid usage");
             continue;
         };
-        let text = message_text(connection, &id)?;
+        let parts = message_parts(connection, &id)?;
+        let text = parts
+            .iter()
+            .filter(|part| part.part_type == "text")
+            .filter_map(|part| part.data.get("text").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n");
         result.assistant_messages.push(AssistantMessage {
             id,
             session_id,
@@ -368,6 +383,7 @@ fn extract_messages(connection: &Connection, result: &mut Extraction) -> Result<
             model,
             usage,
             text,
+            parts,
             created_at_ms,
             updated_at_ms,
         });
@@ -417,28 +433,52 @@ fn extract_steps(connection: &Connection, result: &mut Extraction) -> Result<(),
 }
 
 fn message_text(connection: &Connection, message_id: &str) -> Result<String, Error> {
-    let mut statement = connection.prepare(
-        "SELECT data FROM part WHERE message_id = ?1 AND json_extract(data, '$.type') = 'text'
-         ORDER BY time_created, id",
-    )?;
+    let mut statement = connection
+        .prepare("SELECT data FROM part WHERE message_id = ?1 ORDER BY time_created, id")?;
     let texts = statement
         .query_map([message_id], |row| {
             let raw: String = row.get(0)?;
-            let value: Value = serde_json::from_str(&raw).map_err(|error| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    0,
-                    rusqlite::types::Type::Text,
-                    Box::new(error),
-                )
-            })?;
-            Ok(value
-                .get("text")
-                .and_then(Value::as_str)
-                .unwrap_or_default()
-                .to_owned())
+            let Ok(value) = serde_json::from_str::<Value>(&raw) else {
+                return Ok(None);
+            };
+            if value.get("type").and_then(Value::as_str) != Some("text") {
+                return Ok(None);
+            }
+            Ok(Some(
+                value
+                    .get("text")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default()
+                    .to_owned(),
+            ))
         })?
+        .filter_map(Result::transpose)
         .collect::<Result<Vec<_>, _>>()?;
     Ok(texts.join("\n"))
+}
+
+fn message_parts(connection: &Connection, message_id: &str) -> Result<Vec<OutputPart>, Error> {
+    let mut statement = connection.prepare(
+        "SELECT id, data, time_created FROM part WHERE message_id = ?1 ORDER BY time_created, id",
+    )?;
+    statement
+        .query_map([message_id], |row| {
+            let raw: String = row.get(1)?;
+            let data: Value =
+                serde_json::from_str(&raw).unwrap_or_else(|_| Value::String(raw.clone()));
+            Ok(OutputPart {
+                id: row.get(0)?,
+                part_type: data
+                    .get("type")
+                    .and_then(Value::as_str)
+                    .unwrap_or("invalid-json")
+                    .to_owned(),
+                data,
+                created_at_ms: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(Error::from)
 }
 
 fn part_types(connection: &Connection, message_id: &str) -> Result<Vec<String>, Error> {
@@ -447,13 +487,9 @@ fn part_types(connection: &Connection, message_id: &str) -> Result<Vec<String>, 
     let mut types = Vec::new();
     for row in statement.query_map([message_id], |row| row.get::<_, String>(0))? {
         let raw = row?;
-        let data: Value = serde_json::from_str(&raw).map_err(|error| {
-            rusqlite::Error::FromSqlConversionFailure(
-                0,
-                rusqlite::types::Type::Text,
-                Box::new(error),
-            )
-        })?;
+        let Ok(data) = serde_json::from_str::<Value>(&raw) else {
+            continue;
+        };
         let Some(kind) = data.get("type").and_then(Value::as_str) else {
             continue;
         };
@@ -556,6 +592,13 @@ mod tests {
 
         let extraction = extract(&connection, PathBuf::from("/data/opencode.db")).unwrap();
         assert_eq!(extraction.assistant_messages[0].text, "first\nsecond");
+        assert_eq!(extraction.assistant_messages[0].parts.len(), 4);
+        assert!(
+            extraction.assistant_messages[0]
+                .parts
+                .iter()
+                .any(|part| part.part_type == "tool")
+        );
         assert_eq!(extraction.steps[0].message_id, "assistant-1");
     }
 }
