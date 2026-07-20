@@ -31,6 +31,7 @@
 	const totalTokens = $derived(
 		models.reduce((total, model) => total + (model.usage.total_tokens ?? 0), 0)
 	);
+	const totalCost = $derived($pricingStore.totalCost(models));
 
 	function addUsage(left: Usage, right: Usage): Usage {
 		return {
@@ -68,6 +69,15 @@
 			style: 'percent',
 			maximumFractionDigits: 1
 		}).format((tokens ?? 0) / totalTokens);
+	}
+
+	function costPercentage(cost: number | null) {
+		if (cost == null || totalCost == null) return '—';
+		if (!totalCost) return '0%';
+		return new Intl.NumberFormat('en-US', {
+			style: 'percent',
+			maximumFractionDigits: 1
+		}).format(cost / totalCost);
 	}
 
 	const modelRows = $derived.by(() => {
@@ -164,10 +174,13 @@
 							/></TableCell
 						>
 						<TableCell class="pr-5 text-right text-xs font-medium">
+							<p class="text-[11px] text-muted-foreground">
+								{tokenPercentage(model.usage.total_tokens)}
+							</p>
 							<p>{formatNumber(model.usage.total_tokens)}</p>
 							<p class="text-[11px] text-muted-foreground">
-								{formatCost($pricingStore.totalCost(pricingModels))}, {tokenPercentage(
-									model.usage.total_tokens
+								{formatCost($pricingStore.totalCost(pricingModels))}, {costPercentage(
+									$pricingStore.totalCost(pricingModels)
 								)}
 							</p>
 						</TableCell>
