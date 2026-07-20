@@ -153,6 +153,12 @@ models:
     cached_read: 0.16
     output: 4.0
   - provider: moonshot
+    slug: k2p6
+    input: 0.95
+    cached_write: null
+    cached_read: 0.16
+    output: 4.0
+  - provider: moonshot
     slug: k2p7
     input: 0.95
     cached_write: null
@@ -178,3 +184,10 @@ models:
     cached_write: 0.375
     cached_read: 0.06
     output: 1.2
+
+  - provider: xiaomi
+    slug: mimo-v2.5-free
+    input: 0.14
+    cached_write: null
+    cached_read: 0.002
+    output: 0.28
