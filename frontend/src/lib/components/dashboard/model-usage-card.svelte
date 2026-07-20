@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { requestPricing, type ModelUsage, type Usage } from '$lib/api/ocstats';
+	import { requestPricing, type ModelUsage } from '$lib/api/ocstats';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { getModelPricingContext, type PricingRate } from '$lib/model-pricing';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
@@ -15,7 +15,7 @@
 	} from '$lib/components/ui/table';
 	import ModelPricingTooltip from './model-pricing-tooltip.svelte';
 	import UsageCost from './usage-cost.svelte';
-	import { formatCost, formatNumber } from './format';
+	import { addUsage, emptyUsage, formatCost, formatNumber } from './format';
 
 	let {
 		models,
@@ -34,28 +34,8 @@
 	);
 	const totalCost = $derived($pricingStore.totalCost(models));
 
-	function addUsage(left: Usage, right: Usage): Usage {
-		return {
-			cost: (left.cost ?? 0) + (right.cost ?? 0),
-			input_tokens: left.input_tokens + right.input_tokens,
-			output_tokens: left.output_tokens + right.output_tokens,
-			reasoning_tokens: left.reasoning_tokens + right.reasoning_tokens,
-			cache_read_tokens: left.cache_read_tokens + right.cache_read_tokens,
-			cache_write_tokens: left.cache_write_tokens + right.cache_write_tokens,
-			total_tokens: (left.total_tokens ?? 0) + (right.total_tokens ?? 0)
-		};
-	}
-
 	const totalUsage = $derived(
-		models.reduce(addUsage, {
-			cost: 0,
-			input_tokens: 0,
-			output_tokens: 0,
-			reasoning_tokens: 0,
-			cache_read_tokens: 0,
-			cache_write_tokens: 0,
-			total_tokens: 0
-		})
+		models.reduce((total, model) => addUsage(total, model.usage), emptyUsage)
 	);
 
 	function modelsCost(pricingModels: ModelUsage[], rate: PricingRate) {
@@ -187,14 +167,17 @@
 							/></TableCell
 						>
 						<TableCell class="pr-5 text-right text-xs font-medium">
-							<p class="text-[11px] text-muted-foreground">
-								{tokenPercentage(model.usage.total_tokens)}
+							<p>
+								{formatNumber(model.usage.total_tokens)} -
+								<span title="tokens %" class="opacity-75">
+									{tokenPercentage(model.usage.total_tokens)}
+								</span>
 							</p>
-							<p>{formatNumber(model.usage.total_tokens)}</p>
 							<p class="text-[11px] text-muted-foreground">
-								{formatCost($pricingStore.totalCost(pricingModels))}, {costPercentage(
-									$pricingStore.totalCost(pricingModels)
-								)}
+								{formatCost($pricingStore.totalCost(pricingModels))} -
+								<span title="price %" class="opacity-75">
+									{costPercentage($pricingStore.totalCost(pricingModels))}
+								</span>
 							</p>
 						</TableCell>
 					</TableRow>
@@ -211,36 +194,73 @@
 					<TableRow>
 						<TableCell class="pl-5">Total</TableCell>
 						<TableCell>
-							<p>{formatNumber(totalUsage.input_tokens)}</p>
+							<p>
+								{formatNumber(totalUsage.input_tokens)} -
+								<span title="tokens %" class="opacity-75">
+									{tokenPercentage(totalUsage.input_tokens)}
+								</span>
+							</p>
 							<p class="text-[11px] text-muted-foreground">
-								{tokenPercentage(totalUsage.input_tokens)}
+								{formatCost(modelsCost(models, 'input'))} -
+								<span title="price %" class="opacity-75">
+									{costPercentage(modelsCost(models, 'input'))}
+								</span>
 							</p>
 						</TableCell>
 						<TableCell>
-							<p>{formatNumber(totalUsage.cache_read_tokens)}</p>
+							<p>
+								{formatNumber(totalUsage.cache_read_tokens)} -
+								<span title="tokens %" class="opacity-75">
+									{tokenPercentage(totalUsage.cache_read_tokens)}
+								</span>
+							</p>
 							<p class="text-[11px] text-muted-foreground">
-								{tokenPercentage(totalUsage.cache_read_tokens)}
+								{formatCost(modelsCost(models, 'cached_read'))} -
+								<span title="price %" class="opacity-75">
+									{costPercentage(modelsCost(models, 'cached_read'))}
+								</span>
 							</p>
 						</TableCell>
 						<TableCell>
-							<p>{formatNumber(totalUsage.cache_write_tokens)}</p>
+							<p>
+								{formatNumber(totalUsage.cache_write_tokens)} -
+								<span title="tokens %" class="opacity-75">
+									{tokenPercentage(totalUsage.cache_write_tokens)}
+								</span>
+							</p>
 							<p class="text-[11px] text-muted-foreground">
-								{tokenPercentage(totalUsage.cache_write_tokens)}
+								{formatCost(modelsCost(models, 'cached_write'))} -
+								<span title="price %" class="opacity-75">
+									{costPercentage(modelsCost(models, 'cached_write'))}
+								</span>
 							</p>
 						</TableCell>
 						<TableCell>
-							<p>{formatNumber(totalUsage.output_tokens)}</p>
+							<p>
+								{formatNumber(totalUsage.output_tokens)} -
+								<span title="tokens %" class="opacity-75">
+									{tokenPercentage(totalUsage.output_tokens)}
+								</span>
+							</p>
 							<p class="text-[11px] text-muted-foreground">
-								{tokenPercentage(totalUsage.output_tokens)}
+								{formatCost(modelsCost(models, 'output'))} -
+								<span title="price %" class="opacity-75">
+									{costPercentage(modelsCost(models, 'output'))}
+								</span>
 							</p>
 						</TableCell>
 						<TableCell class="pr-5 text-right">
-							<p>{formatNumber(totalUsage.total_tokens)}</p>
-							<p class="text-[11px] text-muted-foreground">
-								{tokenPercentage(totalUsage.total_tokens)}
+							<p>
+								{formatNumber(totalUsage.total_tokens)} -
+								<span title="tokens %" class="opacity-75">
+									{tokenPercentage(totalUsage.total_tokens)}
+								</span>
 							</p>
 							<p class="text-[11px] text-muted-foreground">
-								{formatCost(totalCost)}, {costPercentage(totalCost)}
+								{formatCost(totalCost)} -
+								<span title="price %" class="opacity-75">
+									{costPercentage(totalCost)}
+								</span>
 							</p>
 						</TableCell>
 					</TableRow>
