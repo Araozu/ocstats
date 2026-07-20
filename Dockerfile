@@ -2,20 +2,32 @@
 FROM node:22-bookworm-slim AS frontend-builder
 WORKDIR /app/frontend
 
-COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml ./
+COPY frontend/package.json frontend/pnpm-lock.yaml frontend/pnpm-workspace.yaml frontend/.npmrc ./
 RUN corepack enable && pnpm install --frozen-lockfile
 
-COPY frontend/ ./
+COPY frontend/tsconfig.json frontend/vite.config.ts ./
+COPY frontend/src/ ./src/
+COPY frontend/static/ ./static/
 RUN pnpm build
 
-FROM rust:1.88-bookworm AS rust-builder
+# Compile dependencies in their own layer. Application and frontend changes then
+# only rebuild the ocstats crate rather than its entire dependency graph.
+FROM rust:1.88-bookworm AS rust-deps
 WORKDIR /app
 
 COPY Cargo.toml Cargo.lock ./
+RUN mkdir src \
+    && printf 'fn main() {}\n' > src/main.rs \
+    && cargo build --release --locked \
+    && rm -rf src target/release/.fingerprint/ocstats-* \
+    && rm -f target/release/ocstats target/release/deps/ocstats-*
+
+FROM rust-deps AS rust-builder
+
 COPY src/ ./src/
 COPY pricing.yaml ./
 COPY --from=frontend-builder /app/frontend/build ./frontend/build
-RUN cargo build --release
+RUN cargo build --release --locked
 
 FROM debian:bookworm-slim
 WORKDIR /var/lib/ocstats

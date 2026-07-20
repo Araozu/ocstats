@@ -8,6 +8,7 @@
 		Table,
 		TableBody,
 		TableCell,
+		TableFooter,
 		TableHead,
 		TableHeader,
 		TableRow
@@ -44,6 +45,18 @@
 			total_tokens: (left.total_tokens ?? 0) + (right.total_tokens ?? 0)
 		};
 	}
+
+	const totalUsage = $derived(
+		models.reduce(addUsage, {
+			cost: 0,
+			input_tokens: 0,
+			output_tokens: 0,
+			reasoning_tokens: 0,
+			cache_read_tokens: 0,
+			cache_write_tokens: 0,
+			total_tokens: 0
+		})
+	);
 
 	function modelsCost(pricingModels: ModelUsage[], rate: PricingRate) {
 		let total = 0;
@@ -193,6 +206,46 @@
 					</TableRow>
 				{/each}
 			</TableBody>
+			{#if models.length > 0}
+				<TableFooter>
+					<TableRow>
+						<TableCell class="pl-5">Total</TableCell>
+						<TableCell>
+							<p>{formatNumber(totalUsage.input_tokens)}</p>
+							<p class="text-[11px] text-muted-foreground">
+								{tokenPercentage(totalUsage.input_tokens)}
+							</p>
+						</TableCell>
+						<TableCell>
+							<p>{formatNumber(totalUsage.cache_read_tokens)}</p>
+							<p class="text-[11px] text-muted-foreground">
+								{tokenPercentage(totalUsage.cache_read_tokens)}
+							</p>
+						</TableCell>
+						<TableCell>
+							<p>{formatNumber(totalUsage.cache_write_tokens)}</p>
+							<p class="text-[11px] text-muted-foreground">
+								{tokenPercentage(totalUsage.cache_write_tokens)}
+							</p>
+						</TableCell>
+						<TableCell>
+							<p>{formatNumber(totalUsage.output_tokens)}</p>
+							<p class="text-[11px] text-muted-foreground">
+								{tokenPercentage(totalUsage.output_tokens)}
+							</p>
+						</TableCell>
+						<TableCell class="pr-5 text-right">
+							<p>{formatNumber(totalUsage.total_tokens)}</p>
+							<p class="text-[11px] text-muted-foreground">
+								{tokenPercentage(totalUsage.total_tokens)}
+							</p>
+							<p class="text-[11px] text-muted-foreground">
+								{formatCost(totalCost)}, {costPercentage(totalCost)}
+							</p>
+						</TableCell>
+					</TableRow>
+				</TableFooter>
+			{/if}
 		</Table>
 	</CardContent>
 </Card>
