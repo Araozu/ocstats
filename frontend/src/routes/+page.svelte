@@ -112,14 +112,7 @@
 		isImporting = true;
 		try {
 			await importData();
-			await queryClient.invalidateQueries({ queryKey: ['turn-text'] });
-			await Promise.all([
-				projectsQuery.refetch(),
-				sessionsQuery.refetch(),
-				modelsQuery.refetch(),
-				pricingQuery.refetch(),
-				modelUsageQuery.refetch()
-			]);
+			await queryClient.invalidateQueries({ refetchType: 'all' });
 		} catch (error) {
 			importError = error instanceof Error ? error : new Error('Unable to import OpenCode data.');
 		} finally {
