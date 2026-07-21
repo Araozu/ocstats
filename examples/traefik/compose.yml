@@ -1,0 +1,19 @@
+# Merge this file with the repository's compose.yml. It expects an existing
+# external Docker network named "proxy" and a Traefik instance on that network.
+services:
+  ocstats:
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: proxy
+      traefik.http.routers.ocstats.rule: Host(`${OCSTATS_HOSTNAME:?Set OCSTATS_HOSTNAME in .env}`)
+      traefik.http.routers.ocstats.entrypoints: websecure
+      traefik.http.routers.ocstats.tls: "true"
+      traefik.http.routers.ocstats.tls.certresolver: ${TRAEFIK_CERT_RESOLVER:-letsencrypt}
+      traefik.http.services.ocstats.loadbalancer.server.port: "4117"
+    networks:
+      - default
+      - proxy
+
+networks:
+  proxy:
+    external: true

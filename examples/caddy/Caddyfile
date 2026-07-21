@@ -1,0 +1,5 @@
+# Replace stats.example.com with your hostname. Caddy obtains and renews TLS
+# certificates automatically when DNS points at this server.
+stats.example.com {
+	reverse_proxy 127.0.0.1:4117
+}
