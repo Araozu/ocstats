@@ -65,12 +65,12 @@
 
 <TableRow>
 	<TableCell class="hidden pl-5 font-mono text-xs sm:table-cell">{index + 1}</TableCell>
-	<TableCell>
-		{#if model}<div class="flex items-center gap-1.5">
-				<p class="text-xs font-medium">{model.model_id}</p>
+	<TableCell class="w-44 max-w-44">
+		{#if model}<div class="flex min-w-0 items-center gap-1.5">
+				<p class="min-w-0 truncate text-xs font-medium" title={model.model_id}>{model.model_id}</p>
 				<ModelPricingTooltip {model} />
 			</div>
-			<p class="text-[11px] text-muted-foreground">
+			<p class="truncate text-[11px] text-muted-foreground">
 				{model.provider_id}{model.variant ? ` · ${model.variant}` : ''}
 			</p>{:else}<span class="text-xs text-muted-foreground">Unknown model</span>{/if}
 		<p class="mt-1 truncate text-[11px] text-muted-foreground sm:hidden">
@@ -79,7 +79,9 @@
 	</TableCell>
 	<TableCell class="hidden max-w-48 sm:table-cell"
 		><p class="truncate text-xs">{turn.types.join(' + ') || '—'}</p>
-		{#if turn.reason}<p class="text-[11px] text-muted-foreground">{turn.reason}</p>{/if}</TableCell
+		{#if turn.reason}<p class="truncate text-[11px] text-muted-foreground">
+				{turn.reason}
+			</p>{/if}</TableCell
 	>
 	<TableCell
 		><UsageCost
@@ -128,7 +130,7 @@
 {#if detailVisible}<TableRow id={detailId} class="bg-muted/30">
 		<TableCell
 			colspan={9}
-			class="whitespace-pre-wrap break-words px-5 py-3 text-xs"
+			class="max-w-0 whitespace-pre-wrap break-words px-5 py-3 text-xs"
 			aria-live="polite"
 		>
 			{#if textQuery.isError}<div class="flex items-center gap-2 text-destructive">
@@ -152,7 +154,7 @@
 							>
 								{part.part_type}
 							</p>
-							<pre class="whitespace-pre-wrap break-words font-sans">{partContent(part.data)}</pre>
+							<pre class="whitespace-pre-wrap break-all font-sans">{partContent(part.data)}</pre>
 						</section>
 					{/each}
 				</div>{/if}

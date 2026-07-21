@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Model } from '$lib/api/ocstats';
 	import InfoIcon from 'phosphor-svelte/lib/InfoIcon';
+	import * as Popover from '$lib/components/ui/popover';
 	import { getModelPricingContext } from '$lib/model-pricing';
 	import { formatPrice } from './format';
 
@@ -9,16 +10,14 @@
 	const pricing = $derived(model ? $pricingStore.find(model) : undefined);
 </script>
 
-<button
-	type="button"
-	class="group relative inline-flex border-0 bg-transparent p-0 text-left"
-	aria-label="Show model pricing"
->
-	<InfoIcon size={13} class="text-muted-foreground" />
-	<span
-		role="dialog"
-		class="pointer-events-none invisible absolute left-full top-1/2 z-50 ml-2 w-48 -translate-y-1/2 rounded-md bg-popover p-3 text-popover-foreground opacity-0 shadow-md ring-1 ring-foreground/10 transition-opacity group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100"
+<Popover.Root>
+	<Popover.Trigger
+		class="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+		aria-label="Show model pricing"
 	>
+		<InfoIcon size={13} />
+	</Popover.Trigger>
+	<Popover.Content sideOffset={6} class="block w-48 max-w-[calc(100vw-2rem)] p-3">
 		<p class="font-medium">Price per 1M tokens</p>
 		<div class="mt-2 space-y-1 text-[11px]">
 			<div class="flex justify-between gap-4">
@@ -34,5 +33,5 @@
 				<span>Output</span><span>{formatPrice(pricing?.output)}</span>
 			</div>
 		</div>
-	</span>
-</button>
+	</Popover.Content>
+</Popover.Root>

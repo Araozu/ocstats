@@ -40,10 +40,7 @@
 	}
 </script>
 
-<aside
-	bind:this={navigation}
-	class="flex flex-col border-b bg-background lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-hidden lg:border-r lg:border-b-0"
->
+<aside bind:this={navigation} class="flex h-dvh flex-col border-r bg-background">
 	<div class="flex h-16 items-center justify-between border-b px-4">
 		<div>
 			<p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -62,11 +59,12 @@
 				: 'text-muted-foreground'}"
 			onclick={onOverview}
 			onkeydown={(event) => moveFocus(event, 0)}
+			aria-current={selectedSessionKey === null ? 'page' : undefined}
 		>
 			Overview
 		</button>
 	</div>
-	<div class="max-h-72 min-h-0 overflow-y-auto p-3 lg:flex-1 lg:max-h-none">
+	<div class="min-h-0 flex-1 overflow-y-auto p-3">
 		<div class="space-y-1">
 			{#each pricedSessions as { session, cost }, index (sessionKey(session.source, session.session_id))}<button
 					data-session-option
@@ -76,6 +74,9 @@
 						: ''}"
 					onclick={() => onSelect(session)}
 					onkeydown={(event) => moveFocus(event, index + 1)}
+					aria-current={selectedSessionKey === sessionKey(session.source, session.session_id)
+						? 'page'
+						: undefined}
 					><p class="truncate text-xs font-medium">{session.title || 'Untitled session'}</p>
 					<div
 						class="mt-1 flex items-center justify-between gap-2 text-[10px] text-muted-foreground"

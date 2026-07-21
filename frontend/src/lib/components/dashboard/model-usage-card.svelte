@@ -103,19 +103,19 @@
 	});
 </script>
 
-<Card class="!overflow-visible">
+<Card>
 	<CardHeader>
 		<CardTitle>{title}</CardTitle>
 		<p class="mt-1 text-xs text-muted-foreground">{description}</p>
-		<Tabs bind:value={grouping} class="mt-3">
-			<TabsList>
+		<Tabs bind:value={grouping} class="mt-3 max-w-full overflow-x-auto pb-1">
+			<TabsList class="max-w-full">
 				<TabsTrigger value="provider">Per model + provider</TabsTrigger>
 				<TabsTrigger value="model">Per model</TabsTrigger>
 			</TabsList>
 		</Tabs>
 	</CardHeader>
 	<CardContent class="p-0">
-		<Table containerClass="!overflow-visible">
+		<Table class="min-w-[42rem]">
 			<TableHeader>
 				<TableRow>
 					<TableHead class="pl-5">Model</TableHead>
@@ -129,14 +129,16 @@
 			<TableBody>
 				{#each modelRows as { model, pricingModels } (`${grouping}:${model.provider_id}:${model.model_id}:${model.variant ?? ''}`)}
 					<TableRow>
-						<TableCell class="pl-5">
-							<div class="flex items-center gap-1.5">
-								<p class="text-xs font-medium">{model.model_id}</p>
+						<TableCell class="w-52 max-w-52 pl-5">
+							<div class="flex min-w-0 items-center gap-1.5">
+								<p class="min-w-0 truncate text-xs font-medium" title={model.model_id}>
+									{model.model_id}
+								</p>
 								<ModelPricingTooltip
 									model={pricingModels.length === 1 ? pricingModels[0] : undefined}
 								/>
 							</div>
-							<p class="text-[11px] text-muted-foreground">
+							<p class="truncate text-[11px] text-muted-foreground">
 								{grouping === 'provider'
 									? `${model.provider_id}${model.variant ? ` · ${model.variant}` : ''}`
 									: 'All providers'}

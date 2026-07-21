@@ -53,9 +53,9 @@
 
 <div class="space-y-7">
 	<section class="flex flex-wrap items-end justify-between gap-4">
-		<div>
+		<div class="min-w-0">
 			<p class="text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Scope</p>
-			<h2 class="mt-1 text-2xl font-semibold tracking-tight">{projectName}</h2>
+			<h2 class="mt-1 break-words text-2xl font-semibold tracking-tight">{projectName}</h2>
 			<p class="mt-2 text-sm text-muted-foreground">
 				A concise view of your recorded OpenCode usage.
 			</p>
@@ -89,7 +89,7 @@
 				</div>
 				<ArrowUpRightIcon size={17} class="text-muted-foreground" /></CardHeader
 			><CardContent class="p-0"
-				><Table
+				><Table class="min-w-[30rem]"
 					><TableHeader
 						><TableRow
 							><TableHead class="pl-5">Session</TableHead><TableHead>Source</TableHead><TableHead
@@ -98,15 +98,18 @@
 						></TableHeader
 					><TableBody
 						>{#each pricedSessions.slice(0, 12) as { session, cost } (sessionKey(session.source, session.session_id))}<TableRow
-								class="cursor-pointer"
-								onclick={() => onSessionSelect(session)}
 								><TableCell class="pl-5"
-									><p class="max-w-64 truncate text-xs font-medium">
-										{session.title || 'Untitled session'}
-									</p>
-									<p class="mt-0.5 font-mono text-[10px] text-muted-foreground">
-										{shortId(session.session_id)}
-									</p></TableCell
+									><button
+										class="block max-w-64 rounded-sm text-left focus-visible:ring-2 focus-visible:ring-ring/50"
+										onclick={() => onSessionSelect(session)}
+									>
+										<span class="block truncate text-xs font-medium">
+											{session.title || 'Untitled session'}
+										</span>
+										<span class="mt-0.5 block font-mono text-[10px] text-muted-foreground">
+											{shortId(session.session_id)}
+										</span>
+									</button></TableCell
 								><TableCell><Badge variant="secondary">{session.source_kind}</Badge></TableCell
 								><TableCell>{formatNumber(session.usage.total_tokens)}</TableCell><TableCell
 									class="pr-5 text-right font-medium">{formatCost(cost)}</TableCell

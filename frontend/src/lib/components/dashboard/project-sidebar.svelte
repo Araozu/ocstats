@@ -35,9 +35,7 @@
 	} = $props();
 </script>
 
-<aside
-	class="flex flex-col border-b bg-sidebar lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-hidden lg:border-r lg:border-b-0"
->
+<aside class="flex h-dvh flex-col border-r bg-sidebar">
 	<div class="flex h-16 items-center gap-3 border-b {collapsed ? 'justify-center px-2' : 'px-5'}">
 		<div
 			class:hidden={collapsed}
@@ -68,7 +66,7 @@
 			<Badge variant="secondary">{projects.length}</Badge>
 		</div>
 		<div
-			class="flex gap-1 overflow-x-auto pb-1 lg:min-h-0 lg:flex-1 lg:flex-col lg:overflow-y-auto {collapsed
+			class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-1 {collapsed
 				? 'items-center'
 				: ''}"
 		>
@@ -79,6 +77,7 @@
 					? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
 					: 'text-muted-foreground'}"
 				onclick={() => onSelect('all')}
+				aria-pressed={selectedProjectKey === 'all'}
 				title="All projects"
 				><DatabaseIcon size={15} /><span class:hidden={collapsed} class="whitespace-nowrap"
 					>All projects</span
@@ -90,6 +89,7 @@
 						? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
 						: 'text-muted-foreground'}"
 					onclick={() => onSelect(projectKey(project))}
+					aria-pressed={selectedProjectKey === projectKey(project)}
 					title={projectLabel(project)}
 					><FolderSimpleIcon size={15} /><span class:hidden={collapsed} class="max-w-48 truncate"
 						>{projectLabel(project)}</span

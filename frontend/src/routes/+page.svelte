@@ -15,6 +15,7 @@
 	import SessionDetail from '$lib/components/dashboard/session-detail.svelte';
 	import ProjectSidebar from '$lib/components/dashboard/project-sidebar.svelte';
 	import SessionSidebar from '$lib/components/dashboard/session-sidebar.svelte';
+	import MobileNavigation from '$lib/components/dashboard/mobile-navigation.svelte';
 	import { setModelPricingContext } from '$lib/model-pricing';
 	import { usageQueries } from '$lib/queries/usage';
 	import WarningCircleIcon from 'phosphor-svelte/lib/WarningCircleIcon';
@@ -179,41 +180,60 @@
 			</form>
 		</main>
 	{:else}
+		<MobileNavigation
+			{projects}
+			sessions={visibleSessions}
+			{projectName}
+			{selectedProjectKey}
+			selectedSessionKey={selectedSession
+				? sessionKey(selectedSession.source, selectedSession.session_id)
+				: null}
+			{isImporting}
+			isLoading={sessionsQuery.isPending}
+			onImport={importDashboard}
+			onOverview={() => updateSelection({ source: null, session_id: null })}
+			onProjectSelect={selectProject}
+			onSessionSelect={selectSession}
+		/>
 		<div
-			class="grid min-h-screen {projectsCollapsed
-				? 'lg:grid-cols-[3.5rem_19rem_minmax(0,1fr)]'
-				: 'lg:grid-cols-[16rem_19rem_minmax(0,1fr)]'}"
+			class="grid min-h-[calc(100dvh-3.5rem)] min-w-0 xl:min-h-screen {projectsCollapsed
+				? 'xl:grid-cols-[3.5rem_19rem_minmax(0,1fr)]'
+				: 'xl:grid-cols-[16rem_19rem_minmax(0,1fr)]'}"
 		>
-			<ProjectSidebar
-				{projects}
-				{selectedProjectKey}
-				{lastUpdated}
-				{isImporting}
-				collapsed={projectsCollapsed}
-				onImport={importDashboard}
-				onSelect={selectProject}
-				onToggle={() => (projectsCollapsed = !projectsCollapsed)}
-			/>
-			<SessionSidebar
-				sessions={visibleSessions}
-				{projectName}
-				selectedSessionKey={selectedSession
-					? sessionKey(selectedSession.source, selectedSession.session_id)
-					: null}
-				isLoading={sessionsQuery.isPending}
-				onOverview={() => updateSelection({ source: null, session_id: null })}
-				onSelect={selectSession}
-			/>
+			<div class="hidden xl:sticky xl:top-0 xl:block xl:h-dvh xl:self-start">
+				<ProjectSidebar
+					{projects}
+					{selectedProjectKey}
+					{lastUpdated}
+					{isImporting}
+					collapsed={projectsCollapsed}
+					onImport={importDashboard}
+					onSelect={selectProject}
+					onToggle={() => (projectsCollapsed = !projectsCollapsed)}
+				/>
+			</div>
+			<div class="hidden xl:sticky xl:top-0 xl:block xl:h-dvh xl:self-start">
+				<SessionSidebar
+					sessions={visibleSessions}
+					{projectName}
+					selectedSessionKey={selectedSession
+						? sessionKey(selectedSession.source, selectedSession.session_id)
+						: null}
+					isLoading={sessionsQuery.isPending}
+					onOverview={() => updateSelection({ source: null, session_id: null })}
+					onSelect={selectSession}
+				/>
+			</div>
 			<main class="min-w-0">
-				<div class="mx-auto max-w-7xl space-y-7 px-5 py-4 md:px-8">
+				<div class="mx-auto max-w-7xl space-y-7 px-4 py-5 sm:px-5 md:px-8">
 					{#if error}
 						<div
 							class="flex items-start gap-3 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm"
 						>
 							<WarningCircleIcon class="mt-0.5 shrink-0 text-destructive" size={18} />
-							<div>
+							<div class="min-w-0">
 								<p class="font-medium">Analytics service unavailable</p>
-								<p class="mt-1 text-xs text-muted-foreground">
+								<p class="mt-1 break-words text-xs text-muted-foreground">
 									{error.message} Start the Rust server with
 									<code class="rounded bg-muted px-1 py-0.5">ocstats serve</code> and refresh.
 								</p>

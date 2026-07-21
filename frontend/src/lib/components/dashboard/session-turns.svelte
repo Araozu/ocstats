@@ -54,7 +54,7 @@
 	}
 </script>
 
-<Card class="!overflow-visible">
+<Card>
 	<CardHeader
 		><CardTitle>Turns</CardTitle>
 		<p class="mt-1 text-xs text-muted-foreground">
@@ -62,7 +62,7 @@
 		</p></CardHeader
 	>
 	<CardContent class="p-0">
-		<Table containerClass="!overflow-visible">
+		<Table class="min-w-[34rem] sm:min-w-[64rem]">
 			<TableHeader
 				><TableRow
 					><TableHead class="hidden pl-5 sm:table-cell">Turn</TableHead><TableHead>Model</TableHead

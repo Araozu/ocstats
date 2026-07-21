@@ -68,7 +68,7 @@
 		<Card size="sm">
 			<CardContent class="p-4">
 				<p class="text-xs text-muted-foreground">{metric.label}</p>
-				<p class="mt-2 text-2xl font-semibold tracking-tight">
+				<p class="mt-2 break-all text-xl font-semibold tracking-tight sm:text-2xl">
 					{typeof metric.value === 'string' ? metric.value : formatNumber(metric.value)}
 				</p>
 			</CardContent>
