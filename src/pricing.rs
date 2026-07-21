@@ -78,7 +78,7 @@ mod tests {
     fn bundled_catalog_is_valid() {
         let catalog: PricingCatalog =
             serde_yaml::from_str(include_str!("../pricing.yaml")).unwrap();
-        assert_eq!(catalog.models.len(), 28);
+        assert_eq!(catalog.models.len(), 30);
         assert!(catalog.models.iter().any(|model| model.slug == "gpt-5.5"));
     }
 }

@@ -8,7 +8,8 @@
 		emptyUsage,
 		projectKey,
 		projectLabel,
-		sessionKey
+		sessionKey,
+		sortSessionsByDate
 	} from '$lib/components/dashboard/format';
 	import Overview from '$lib/components/dashboard/overview.svelte';
 	import DashboardSkeleton from '$lib/components/dashboard/dashboard-skeleton.svelte';
@@ -35,6 +36,7 @@
 	const modelPricing = setModelPricingContext();
 	$effect(() => modelPricing.set(pricing, pricingQuery.data !== undefined));
 	let projectsCollapsed = $state(false);
+	let sessionSortDirection = $state<'asc' | 'desc'>('desc');
 	const selectedProjectKey = $derived(page.url.searchParams.get('project') ?? 'all');
 	const selectedSession = $derived.by(() => {
 		const source = page.url.searchParams.get('source');
@@ -63,14 +65,15 @@
 	let isLoggingIn = $state(false);
 	let importError = $state<Error | null>(null);
 	let isImporting = $state(false);
-	const visibleSessions = $derived(
-		selectedProject
+	const visibleSessions = $derived.by(() => {
+		const filtered = selectedProject
 			? sessions.filter(
 					(session) =>
 						session.project_id === selectedProject.id && session.source === selectedProject.source
 				)
-			: sessions
-	);
+			: sessions;
+		return sortSessionsByDate(filtered, sessionSortDirection);
+	});
 	const totals = $derived(
 		visibleSessions.reduce((total, session) => addUsage(total, session.usage), emptyUsage)
 	);
@@ -106,6 +109,10 @@
 			source: session.source,
 			session_id: session.session_id
 		});
+	}
+
+	function toggleSessionSort() {
+		sessionSortDirection = sessionSortDirection === 'desc' ? 'asc' : 'desc';
 	}
 
 	async function importDashboard() {
@@ -188,12 +195,14 @@
 			selectedSessionKey={selectedSession
 				? sessionKey(selectedSession.source, selectedSession.session_id)
 				: null}
+			sortDirection={sessionSortDirection}
 			{isImporting}
 			isLoading={sessionsQuery.isPending}
 			onImport={importDashboard}
 			onOverview={() => updateSelection({ source: null, session_id: null })}
 			onProjectSelect={selectProject}
 			onSessionSelect={selectSession}
+			onToggleSort={toggleSessionSort}
 		/>
 		<div
 			class="grid min-h-[calc(100dvh-3.5rem)] min-w-0 xl:min-h-screen {projectsCollapsed
@@ -216,12 +225,14 @@
 				<SessionSidebar
 					sessions={visibleSessions}
 					{projectName}
+					sortDirection={sessionSortDirection}
 					selectedSessionKey={selectedSession
 						? sessionKey(selectedSession.source, selectedSession.session_id)
 						: null}
 					isLoading={sessionsQuery.isPending}
 					onOverview={() => updateSelection({ source: null, session_id: null })}
 					onSelect={selectSession}
+					onToggleSort={toggleSessionSort}
 				/>
 			</div>
 			<main class="min-w-0">

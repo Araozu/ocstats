@@ -34,6 +34,7 @@ pub struct SessionUsage {
     pub session_id: String,
     pub project_id: String,
     pub title: String,
+    pub created_at_ms: i64,
     pub usage: Usage,
     pub models: Vec<ModelUsage>,
     pub source_kind: String,
@@ -73,6 +74,7 @@ pub struct SessionDetail {
     pub session_id: String,
     pub project_id: String,
     pub title: String,
+    pub created_at_ms: i64,
     pub usage: Usage,
     pub source_kind: String,
     pub models: Vec<ModelUsage>,
@@ -210,9 +212,10 @@ impl AnalyticsStore {
         let (where_clause, values) = usage_filter(filter);
         let mut statement = self.connection.prepare(&format!(
             "SELECT su.source, su.session_id, s.project_id, s.title, su.cost, su.input_tokens, su.output_tokens,
-                    su.reasoning_tokens, su.cache_read_tokens, su.cache_write_tokens, su.total_tokens, su.source_kind
-             FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
-             {where_clause} ORDER BY su.source, su.session_id"
+                    su.reasoning_tokens, su.cache_read_tokens, su.cache_write_tokens, su.total_tokens,
+                    su.source_kind, s.created_at_ms
+              FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
+              {where_clause} ORDER BY s.created_at_ms, su.source, s.id"
         ))?;
         let sessions = statement
             .query_map(rusqlite::params_from_iter(values), |row| {
@@ -223,6 +226,7 @@ impl AnalyticsStore {
                     session_id,
                     project_id: row.get(2)?,
                     title: row.get(3)?,
+                    created_at_ms: row.get(12)?,
                     usage: usage_from_row(row, 4)?,
                     models: Vec::new(),
                     source_kind: row.get(11)?,
@@ -293,22 +297,24 @@ impl AnalyticsStore {
         let mut statement = self.connection.prepare(
             "SELECT su.source, su.session_id, s.project_id, s.title, su.cost, su.input_tokens,
                     su.output_tokens, su.reasoning_tokens, su.cache_read_tokens, su.cache_write_tokens,
-                    su.total_tokens, su.source_kind
-             FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
-             WHERE su.source = ?1 AND su.session_id = ?2",
+                    su.total_tokens, su.source_kind, s.created_at_ms
+              FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
+              WHERE su.source = ?1 AND su.session_id = ?2",
         )?;
-        let Some((source, session_id, project_id, title, usage, source_kind)) = statement
-            .query_row(params![source, session_id], |row| {
-                Ok((
-                    row.get(0)?,
-                    row.get(1)?,
-                    row.get(2)?,
-                    row.get(3)?,
-                    usage_from_row(row, 4)?,
-                    row.get(11)?,
-                ))
-            })
-            .optional()?
+        let Some((source, session_id, project_id, title, usage, source_kind, created_at_ms)) =
+            statement
+                .query_row(params![source, session_id], |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        usage_from_row(row, 4)?,
+                        row.get(11)?,
+                        row.get(12)?,
+                    ))
+                })
+                .optional()?
         else {
             return Ok(None);
         };
@@ -380,6 +386,7 @@ impl AnalyticsStore {
             session_id,
             project_id,
             title,
+            created_at_ms,
             usage,
             source_kind,
             models,
@@ -1044,6 +1051,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(detail.turns.len(), 1);
+        assert_eq!(detail.created_at_ms, 1);
         assert_eq!(detail.turns[0].types, vec!["reasoning", "bash"]);
         assert_eq!(detail.turns[0].reason.as_deref(), Some("tool-calls"));
         assert_eq!(
@@ -1054,6 +1062,7 @@ mod tests {
                     session_id: "session-message".into(),
                     project_id: "project-1".into(),
                     title: "session-message".into(),
+                    created_at_ms: 1,
                     usage: usage(2.0, 20),
                     models: vec![ModelUsage {
                         provider_id: "openai".into(),
@@ -1068,6 +1077,7 @@ mod tests {
                     session_id: "session-steps".into(),
                     project_id: "project-1".into(),
                     title: "session-steps".into(),
+                    created_at_ms: 1,
                     usage: usage(4.0, 40),
                     models: vec![ModelUsage {
                         provider_id: "openai".into(),
@@ -1121,5 +1131,65 @@ mod tests {
                 .input_tokens,
             40
         );
+    }
+
+    #[test]
+    fn session_usage_is_sorted_by_creation_time() {
+        let directory = tempdir().unwrap();
+        let source = PathBuf::from("/data/opencode.db");
+        let mut older = session("session-older");
+        older.created_at_ms = 10;
+        let mut newer = session("session-newer");
+        newer.created_at_ms = 20;
+        let extraction = Extraction {
+            source: source.clone(),
+            sessions: vec![newer, older],
+            ..Extraction::default()
+        };
+        let mut store = AnalyticsStore::open(directory.path().join("analytics.db")).unwrap();
+
+        store.import(&extraction).unwrap();
+
+        let sessions = store.session_usage().unwrap();
+        assert_eq!(
+            sessions
+                .iter()
+                .map(|session| session.session_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["session-older", "session-newer"]
+        );
+        assert_eq!(sessions[0].created_at_ms, 10);
+        assert_eq!(sessions[1].created_at_ms, 20);
+    }
+
+    #[test]
+    fn session_usage_is_sorted_by_creation_time_across_sources() {
+        let directory = tempdir().unwrap();
+        let mut older = session("session-older");
+        older.created_at_ms = 10;
+        let mut newer = session("session-newer");
+        newer.created_at_ms = 20;
+        let mut store = AnalyticsStore::open(directory.path().join("analytics.db")).unwrap();
+
+        store
+            .import(&Extraction {
+                source: PathBuf::from("/data/a.db"),
+                sessions: vec![newer],
+                ..Extraction::default()
+            })
+            .unwrap();
+        store
+            .import(&Extraction {
+                source: PathBuf::from("/data/z.db"),
+                sessions: vec![older],
+                ..Extraction::default()
+            })
+            .unwrap();
+
+        let sessions = store.session_usage().unwrap();
+        assert_eq!(sessions[0].session_id, "session-older");
+        assert_eq!(sessions[0].source, "/data/z.db");
+        assert_eq!(sessions[1].session_id, "session-newer");
+        assert_eq!(sessions[1].source, "/data/a.db");
     }
 }

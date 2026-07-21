@@ -1,6 +1,9 @@
 <script lang="ts">
+	import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
+	import CaretUpIcon from 'phosphor-svelte/lib/CaretUpIcon';
 	import type { SessionUsage } from '$lib/api/ocstats';
 	import { Badge } from '$lib/components/ui/badge';
+	import { Button } from '$lib/components/ui/button';
 	import { getModelPricingContext } from '$lib/model-pricing';
 	import { formatCost, sessionKey, shortId } from './format';
 
@@ -8,16 +11,20 @@
 		sessions,
 		projectName,
 		selectedSessionKey,
+		sortDirection,
 		isLoading = false,
 		onOverview,
-		onSelect
+		onSelect,
+		onToggleSort
 	}: {
 		sessions: SessionUsage[];
 		projectName: string;
 		selectedSessionKey: string | null;
+		sortDirection: 'asc' | 'desc';
 		isLoading?: boolean;
 		onOverview: () => void;
 		onSelect: (session: SessionUsage) => void;
+		onToggleSort: () => void;
 	} = $props();
 	const pricingStore = getModelPricingContext();
 
@@ -48,7 +55,20 @@
 			</p>
 			<p class="mt-1 max-w-44 truncate text-xs text-muted-foreground">{projectName}</p>
 		</div>
-		<Badge variant="secondary">{sessions.length}</Badge>
+		<div class="flex items-center gap-1">
+			<Badge variant="secondary">{sessions.length}</Badge>
+			<Button
+				variant="ghost"
+				size="icon-sm"
+				onclick={onToggleSort}
+				aria-label={sortDirection === 'desc'
+					? 'Sort sessions oldest first'
+					: 'Sort sessions newest first'}
+				title={sortDirection === 'desc' ? 'Oldest first' : 'Newest first'}
+			>
+				{#if sortDirection === 'desc'}<CaretDownIcon />{:else}<CaretUpIcon />{/if}
+			</Button>
+		</div>
 	</div>
 	<div class="border-b p-3">
 		<button

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import ArrowsClockwiseIcon from 'phosphor-svelte/lib/ArrowsClockwiseIcon';
+	import CaretDownIcon from 'phosphor-svelte/lib/CaretDownIcon';
+	import CaretUpIcon from 'phosphor-svelte/lib/CaretUpIcon';
 	import ChartLineUpIcon from 'phosphor-svelte/lib/ChartLineUpIcon';
 	import DatabaseIcon from 'phosphor-svelte/lib/DatabaseIcon';
 	import FolderSimpleIcon from 'phosphor-svelte/lib/FolderSimpleIcon';
@@ -23,24 +25,28 @@
 		projectName,
 		selectedProjectKey,
 		selectedSessionKey,
+		sortDirection,
 		isLoading = false,
 		isImporting = false,
 		onImport,
 		onOverview,
 		onProjectSelect,
-		onSessionSelect
+		onSessionSelect,
+		onToggleSort
 	}: {
 		projects: Project[];
 		sessions: SessionUsage[];
 		projectName: string;
 		selectedProjectKey: string;
 		selectedSessionKey: string | null;
+		sortDirection: 'asc' | 'desc';
 		isLoading?: boolean;
 		isImporting?: boolean;
 		onImport: () => void;
 		onOverview: () => void;
 		onProjectSelect: (key: string) => void;
 		onSessionSelect: (session: SessionUsage) => void;
+		onToggleSort: () => void;
 	} = $props();
 	const pricingStore = getModelPricingContext();
 	const pricedSessions = $derived(
@@ -143,7 +149,20 @@
 							>
 								Sessions
 							</p>
-							<Badge variant="secondary">{sessions.length}</Badge>
+							<div class="flex items-center gap-1">
+								<Badge variant="secondary">{sessions.length}</Badge>
+								<Button
+									variant="ghost"
+									size="icon-sm"
+									onclick={onToggleSort}
+									aria-label={sortDirection === 'desc'
+										? 'Sort sessions oldest first'
+										: 'Sort sessions newest first'}
+									title={sortDirection === 'desc' ? 'Oldest first' : 'Newest first'}
+								>
+									{#if sortDirection === 'desc'}<CaretDownIcon />{:else}<CaretUpIcon />{/if}
+								</Button>
+							</div>
 						</div>
 						<div class="space-y-1">
 							<button

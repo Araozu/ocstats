@@ -1,4 +1,6 @@
-import type { Project, Usage } from '$lib/api/ocstats';
+import type { Project, SessionUsage, Usage } from '$lib/api/ocstats';
+
+export type SessionSortDirection = 'asc' | 'desc';
 
 export const emptyUsage: Usage = {
 	cost: 0,
@@ -25,6 +27,22 @@ export function addUsage(left: Usage, right: Usage): Usage {
 export const projectKey = (project: Project) => `${project.source}:${project.id}`;
 export const sessionKey = (source: string, sessionId: string) => `${source}:${sessionId}`;
 
+export function sortSessionsByDate(
+	sessions: SessionUsage[],
+	direction: SessionSortDirection
+): SessionUsage[] {
+	return [...sessions].sort((left, right) => {
+		const dateComparison = left.created_at_ms - right.created_at_ms;
+		if (dateComparison !== 0) {
+			return direction === 'asc' ? dateComparison : -dateComparison;
+		}
+		const keyComparison = sessionKey(left.source, left.session_id).localeCompare(
+			sessionKey(right.source, right.session_id)
+		);
+		return direction === 'asc' ? keyComparison : -keyComparison;
+	});
+}
+
 export function projectLabel(project: Project) {
 	return project.name?.trim() || project.worktree.split('/').filter(Boolean).pop() || project.id;
 }
@@ -46,6 +64,13 @@ export function formatCost(value: number | null | undefined) {
 		currency: 'USD',
 		maximumFractionDigits: 2
 	}).format(value);
+}
+
+export function formatDateTime(value: number) {
+	return new Intl.DateTimeFormat(undefined, {
+		dateStyle: 'medium',
+		timeStyle: 'short'
+	}).format(new Date(value));
 }
 
 export function formatPrice(value: number | null | undefined) {
