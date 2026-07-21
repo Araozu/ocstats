@@ -2,6 +2,12 @@ import type { Project, SessionUsage, Usage } from '$lib/api/ocstats';
 
 export type SessionSortDirection = 'asc' | 'desc';
 
+export type SessionTreeNode = {
+	key: string;
+	session: SessionUsage;
+	children: SessionTreeNode[];
+};
+
 export const emptyUsage: Usage = {
 	cost: 0,
 	input_tokens: 0,
@@ -41,6 +47,85 @@ export function sortSessionsByDate(
 		);
 		return direction === 'asc' ? keyComparison : -keyComparison;
 	});
+}
+
+export function buildSessionTree(sessions: SessionUsage[]): SessionTreeNode[] {
+	const nodes = new Map<string, SessionTreeNode>();
+	const parentKeys = new Map<string, string>();
+
+	for (const session of sessions) {
+		const key = sessionKey(session.source, session.session_id);
+		nodes.set(key, { key, session, children: [] });
+	}
+
+	for (const session of sessions) {
+		if (!session.parent_id) continue;
+		const key = sessionKey(session.source, session.session_id);
+		const parentKey = sessionKey(session.source, session.parent_id);
+		if (parentKey !== key && nodes.has(parentKey)) parentKeys.set(key, parentKey);
+	}
+
+	// Break one edge in every cycle so malformed data remains visible as a tree.
+	for (const key of parentKeys.keys()) {
+		const visited = new Set<string>();
+		let current = key;
+		while (parentKeys.has(current)) {
+			const parentKey = parentKeys.get(current)!;
+			if (visited.has(parentKey)) {
+				parentKeys.delete(current);
+				break;
+			}
+			visited.add(current);
+			current = parentKey;
+		}
+	}
+
+	const roots: SessionTreeNode[] = [];
+	for (const node of nodes.values()) {
+		const parent = nodes.get(parentKeys.get(node.key) ?? '');
+		if (parent) parent.children.push(node);
+		else roots.push(node);
+	}
+	return roots;
+}
+
+export function sessionAncestorKeys(
+	roots: SessionTreeNode[],
+	selectedKey: string | null
+): string[] {
+	if (!selectedKey) return [];
+
+	function find(nodes: SessionTreeNode[], ancestors: string[]): string[] | null {
+		for (const node of nodes) {
+			if (node.key === selectedKey) return ancestors;
+			const result = find(node.children, [...ancestors, node.key]);
+			if (result) return result;
+		}
+		return null;
+	}
+
+	return find(roots, []) ?? [];
+}
+
+export function sessionRevealState(
+	sessions: SessionUsage[],
+	roots: SessionTreeNode[],
+	selectedKey: string | null,
+	revealedKey: string | null
+) {
+	if (!selectedKey || selectedKey === revealedKey) {
+		return { ancestors: [], revealedKey: selectedKey };
+	}
+	const selectedExists = sessions.some(
+		(session) => sessionKey(session.source, session.session_id) === selectedKey
+	);
+	return selectedExists
+		? { ancestors: sessionAncestorKeys(roots, selectedKey), revealedKey: selectedKey }
+		: { ancestors: [], revealedKey };
+}
+
+export function sessionTreeGroupId(key: string) {
+	return `session-group-${encodeURIComponent(key)}`;
 }
 
 export function projectLabel(project: Project) {

@@ -29,6 +29,7 @@ const REQUIRED_SCHEMA: &[(&str, &[&str])] = &[
         "session",
         &[
             "id",
+            "parent_id",
             "project_id",
             "title",
             "model",
@@ -109,6 +110,7 @@ pub struct Project {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Session {
     pub id: String,
+    pub parent_id: Option<String>,
     pub project: Project,
     pub title: String,
     pub model: Option<Model>,
@@ -293,7 +295,7 @@ fn extract(connection: &Connection, source: PathBuf) -> Result<Extraction, Error
 
 fn extract_sessions(connection: &Connection, result: &mut Extraction) -> Result<(), Error> {
     let mut statement = connection.prepare(
-        "SELECT s.id, s.title, s.model, s.cost, s.tokens_input, s.tokens_output, s.tokens_reasoning,
+        "SELECT s.id, s.parent_id, s.title, s.model, s.cost, s.tokens_input, s.tokens_output, s.tokens_reasoning,
                 s.tokens_cache_read, s.tokens_cache_write, s.time_created, s.time_updated,
                 p.id, p.name, p.worktree
          FROM session s JOIN project p ON p.id = s.project_id ORDER BY s.time_created, s.id",
@@ -301,23 +303,24 @@ fn extract_sessions(connection: &Connection, result: &mut Extraction) -> Result<
     let rows = statement.query_map([], |row| {
         Ok(Session {
             id: row.get(0)?,
-            title: row.get(1)?,
-            model: parse_model(row.get::<_, Option<String>>(2)?),
+            parent_id: row.get(1)?,
+            title: row.get(2)?,
+            model: parse_model(row.get::<_, Option<String>>(3)?),
             usage: Usage {
-                cost: row.get(3)?,
-                input_tokens: nonnegative(row.get(4)?),
-                output_tokens: nonnegative(row.get(5)?),
-                reasoning_tokens: nonnegative(row.get(6)?),
-                cache_read_tokens: nonnegative(row.get(7)?),
-                cache_write_tokens: nonnegative(row.get(8)?),
+                cost: row.get(4)?,
+                input_tokens: nonnegative(row.get(5)?),
+                output_tokens: nonnegative(row.get(6)?),
+                reasoning_tokens: nonnegative(row.get(7)?),
+                cache_read_tokens: nonnegative(row.get(8)?),
+                cache_write_tokens: nonnegative(row.get(9)?),
                 total_tokens: None,
             },
-            created_at_ms: row.get(9)?,
-            updated_at_ms: row.get(10)?,
+            created_at_ms: row.get(10)?,
+            updated_at_ms: row.get(11)?,
             project: Project {
-                id: row.get(11)?,
-                name: row.get(12)?,
-                worktree: row.get(13)?,
+                id: row.get(12)?,
+                name: row.get(13)?,
+                worktree: row.get(14)?,
             },
         })
     })?;
@@ -564,6 +567,18 @@ mod tests {
     }
 
     #[test]
+    fn requires_session_parent_id() {
+        let connection = Connection::open_in_memory().unwrap();
+        connection
+            .execute("CREATE TABLE session (id TEXT)", [])
+            .unwrap();
+
+        let error = validate_schema(&connection).unwrap_err();
+
+        assert!(error.to_string().contains("column session.parent_id"));
+    }
+
+    #[test]
     fn parses_step_usage() {
         let data: Value = serde_json::json!({"cost": 0.2, "tokens": {"total": 10, "input": 2, "output": 3, "reasoning": 1, "cache": {"read": 2, "write": 2}}});
         assert_eq!(usage_from_value(&data).unwrap().total_tokens, Some(10));
@@ -577,11 +592,13 @@ mod tests {
                 "CREATE TABLE project (id TEXT, worktree TEXT, name TEXT);
                  CREATE TABLE session (id TEXT, project_id TEXT, title TEXT, model TEXT, cost REAL,
                    tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER,
-                   tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_created INTEGER, time_updated INTEGER);
+                   tokens_cache_read INTEGER, tokens_cache_write INTEGER, time_created INTEGER, time_updated INTEGER,
+                   parent_id TEXT);
                  CREATE TABLE message (id TEXT, session_id TEXT, data TEXT, time_created INTEGER, time_updated INTEGER);
                  CREATE TABLE part (id TEXT, message_id TEXT, session_id TEXT, data TEXT, time_created INTEGER, time_updated INTEGER);
                  INSERT INTO project VALUES ('project-1', '/work', 'work');
-                 INSERT INTO session VALUES ('session-1', 'project-1', 'test', NULL, NULL, 0, 0, 0, 0, 0, 1, 2);
+                  INSERT INTO session VALUES ('session-1', 'project-1', 'test', NULL, NULL, 0, 0, 0, 0, 0, 1, 2, NULL);
+                  INSERT INTO session VALUES ('session-2', 'project-1', 'child', NULL, NULL, 0, 0, 0, 0, 0, 2, 3, 'session-1');
                  INSERT INTO message VALUES ('assistant-1', 'session-1', '{\"role\":\"assistant\",\"providerID\":\"openai\",\"modelID\":\"gpt-5\",\"tokens\":{\"input\":1,\"output\":2,\"reasoning\":0,\"cache\":{\"read\":0,\"write\":0}}}', 1, 2);
                  INSERT INTO part VALUES ('text-2', 'assistant-1', 'session-1', '{\"type\":\"text\",\"text\":\"second\"}', 2, 2);
                  INSERT INTO part VALUES ('tool-1', 'assistant-1', 'session-1', '{\"type\":\"tool\",\"text\":\"hidden\"}', 3, 3);
@@ -591,6 +608,11 @@ mod tests {
             .unwrap();
 
         let extraction = extract(&connection, PathBuf::from("/data/opencode.db")).unwrap();
+        assert_eq!(extraction.sessions[0].parent_id, None);
+        assert_eq!(
+            extraction.sessions[1].parent_id.as_deref(),
+            Some("session-1")
+        );
         assert_eq!(extraction.assistant_messages[0].text, "first\nsecond");
         assert_eq!(extraction.assistant_messages[0].parts.len(), 4);
         assert!(

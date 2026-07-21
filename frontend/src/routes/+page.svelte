@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { createQuery, useQueryClient } from '@tanstack/svelte-query';
+	import { SvelteSet } from 'svelte/reactivity';
 	import { getAuthStatus, importData, login, type SessionUsage } from '$lib/api/ocstats';
 	import {
 		addUsage,
@@ -37,7 +38,17 @@
 	$effect(() => modelPricing.set(pricing, pricingQuery.data !== undefined));
 	let projectsCollapsed = $state(false);
 	let sessionSortDirection = $state<'asc' | 'desc'>('desc');
+	let previousProjectKey = $state<string | undefined>(undefined);
+	let expandedSessionKeys = new SvelteSet<string>();
+	let revealedSessionKey = $state<string | null>(null);
 	const selectedProjectKey = $derived(page.url.searchParams.get('project') ?? 'all');
+	$effect(() => {
+		if (previousProjectKey !== undefined && previousProjectKey !== selectedProjectKey) {
+			expandedSessionKeys.clear();
+			revealedSessionKey = null;
+		}
+		previousProjectKey = selectedProjectKey;
+	});
 	const selectedSession = $derived.by(() => {
 		const source = page.url.searchParams.get('source');
 		const sessionId = page.url.searchParams.get('session_id');
@@ -46,6 +57,12 @@
 					(session) => session.source === source && session.session_id === sessionId
 				) ?? null)
 			: null;
+	});
+	const selectedSessionKey = $derived(
+		selectedSession ? sessionKey(selectedSession.source, selectedSession.session_id) : null
+	);
+	$effect(() => {
+		if (selectedSessionKey === null) revealedSessionKey = null;
 	});
 	const sessionQuery = createQuery(() =>
 		usageQueries.session(
@@ -192,9 +209,9 @@
 			sessions={visibleSessions}
 			{projectName}
 			{selectedProjectKey}
-			selectedSessionKey={selectedSession
-				? sessionKey(selectedSession.source, selectedSession.session_id)
-				: null}
+			{selectedSessionKey}
+			expandedKeys={expandedSessionKeys}
+			{revealedSessionKey}
 			sortDirection={sessionSortDirection}
 			{isImporting}
 			isLoading={sessionsQuery.isPending}
@@ -203,6 +220,7 @@
 			onProjectSelect={selectProject}
 			onSessionSelect={selectSession}
 			onToggleSort={toggleSessionSort}
+			onAncestorsRevealed={(key) => (revealedSessionKey = key)}
 		/>
 		<div
 			class="grid min-h-[calc(100dvh-3.5rem)] min-w-0 xl:min-h-screen {projectsCollapsed
@@ -225,14 +243,15 @@
 				<SessionSidebar
 					sessions={visibleSessions}
 					{projectName}
+					expandedKeys={expandedSessionKeys}
+					{revealedSessionKey}
 					sortDirection={sessionSortDirection}
-					selectedSessionKey={selectedSession
-						? sessionKey(selectedSession.source, selectedSession.session_id)
-						: null}
+					{selectedSessionKey}
 					isLoading={sessionsQuery.isPending}
 					onOverview={() => updateSelection({ source: null, session_id: null })}
 					onSelect={selectSession}
 					onToggleSort={toggleSessionSort}
+					onAncestorsRevealed={(key) => (revealedSessionKey = key)}
 				/>
 			</div>
 			<main class="min-w-0">

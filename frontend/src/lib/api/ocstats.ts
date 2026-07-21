@@ -18,6 +18,7 @@ export type SessionUsage = {
 	project_id: string;
 	title: string;
 	created_at_ms: number;
+	parent_id: string | null;
 	usage: Usage;
 	models: ModelUsage[];
 	source_kind: string;

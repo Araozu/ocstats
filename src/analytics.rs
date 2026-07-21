@@ -12,8 +12,8 @@ use crate::{
     default_analytics_path,
 };
 
-const EXTRACTOR_SCHEMA_VERSION: u32 = 2;
-const EXTRACTOR_SCHEMA_SIGNATURE: &str = "project(id,worktree,name);session(id,project_id,title,model,cost,tokens_input,tokens_output,tokens_reasoning,tokens_cache_read,tokens_cache_write,time_created,time_updated);message(id,session_id,data,time_created,time_updated);part(id,message_id,session_id,data,time_created,time_updated)";
+const EXTRACTOR_SCHEMA_VERSION: u32 = 3;
+const EXTRACTOR_SCHEMA_SIGNATURE: &str = "project(id,worktree,name);session(id,parent_id,project_id,title,model,cost,tokens_input,tokens_output,tokens_reasoning,tokens_cache_read,tokens_cache_write,time_created,time_updated);message(id,session_id,data,time_created,time_updated);part(id,message_id,session_id,data,time_created,time_updated)";
 
 /// Application-owned SQLite store populated from read-only OpenCode extractions.
 pub struct AnalyticsStore {
@@ -35,6 +35,7 @@ pub struct SessionUsage {
     pub project_id: String,
     pub title: String,
     pub created_at_ms: i64,
+    pub parent_id: Option<String>,
     pub usage: Usage,
     pub models: Vec<ModelUsage>,
     pub source_kind: String,
@@ -75,6 +76,7 @@ pub struct SessionDetail {
     pub project_id: String,
     pub title: String,
     pub created_at_ms: i64,
+    pub parent_id: Option<String>,
     pub usage: Usage,
     pub source_kind: String,
     pub models: Vec<ModelUsage>,
@@ -213,7 +215,7 @@ impl AnalyticsStore {
         let mut statement = self.connection.prepare(&format!(
             "SELECT su.source, su.session_id, s.project_id, s.title, su.cost, su.input_tokens, su.output_tokens,
                     su.reasoning_tokens, su.cache_read_tokens, su.cache_write_tokens, su.total_tokens,
-                    su.source_kind, s.created_at_ms
+                    su.source_kind, s.created_at_ms, s.parent_id
               FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
               {where_clause} ORDER BY s.created_at_ms, su.source, s.id"
         ))?;
@@ -227,6 +229,7 @@ impl AnalyticsStore {
                     project_id: row.get(2)?,
                     title: row.get(3)?,
                     created_at_ms: row.get(12)?,
+                    parent_id: row.get(13)?,
                     usage: usage_from_row(row, 4)?,
                     models: Vec::new(),
                     source_kind: row.get(11)?,
@@ -297,24 +300,33 @@ impl AnalyticsStore {
         let mut statement = self.connection.prepare(
             "SELECT su.source, su.session_id, s.project_id, s.title, su.cost, su.input_tokens,
                     su.output_tokens, su.reasoning_tokens, su.cache_read_tokens, su.cache_write_tokens,
-                    su.total_tokens, su.source_kind, s.created_at_ms
+                    su.total_tokens, su.source_kind, s.created_at_ms, s.parent_id
               FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
               WHERE su.source = ?1 AND su.session_id = ?2",
         )?;
-        let Some((source, session_id, project_id, title, usage, source_kind, created_at_ms)) =
-            statement
-                .query_row(params![source, session_id], |row| {
-                    Ok((
-                        row.get(0)?,
-                        row.get(1)?,
-                        row.get(2)?,
-                        row.get(3)?,
-                        usage_from_row(row, 4)?,
-                        row.get(11)?,
-                        row.get(12)?,
-                    ))
-                })
-                .optional()?
+        let Some((
+            source,
+            session_id,
+            project_id,
+            title,
+            usage,
+            source_kind,
+            created_at_ms,
+            parent_id,
+        )) = statement
+            .query_row(params![source, session_id], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    usage_from_row(row, 4)?,
+                    row.get(11)?,
+                    row.get(12)?,
+                    row.get(13)?,
+                ))
+            })
+            .optional()?
         else {
             return Ok(None);
         };
@@ -387,6 +399,7 @@ impl AnalyticsStore {
             project_id,
             title,
             created_at_ms,
+            parent_id,
             usage,
             source_kind,
             models,
@@ -570,8 +583,9 @@ impl AnalyticsStore {
              CREATE TABLE IF NOT EXISTS session (
                source TEXT NOT NULL REFERENCES source(path), id TEXT NOT NULL,
                project_id TEXT NOT NULL, project_name TEXT, project_worktree TEXT NOT NULL,
-               title TEXT NOT NULL, provider_id TEXT, model_id TEXT, variant TEXT,
-               cost REAL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
+                title TEXT NOT NULL, provider_id TEXT, model_id TEXT, variant TEXT,
+                parent_id TEXT,
+                cost REAL, input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
                reasoning_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL,
                cache_write_tokens INTEGER NOT NULL, created_at_ms INTEGER NOT NULL, updated_at_ms INTEGER NOT NULL,
                PRIMARY KEY (source, id)
@@ -630,6 +644,7 @@ impl AnalyticsStore {
              FROM session s LEFT JOIN step_totals st ON st.source = s.source AND st.session_id = s.id
              LEFT JOIN message_totals mt ON mt.source = s.source AND mt.session_id = s.id;",
         )?;
+        ensure_column(&self.connection, "session", "parent_id", "TEXT")?;
         ensure_column(&self.connection, "assistant_message", "parent_id", "TEXT")?;
         ensure_column(&self.connection, "assistant_message", "text", "TEXT")?;
         ensure_column(&self.connection, "assistant_message", "parts", "TEXT")?;
@@ -731,16 +746,21 @@ fn upsert_session(connection: &Connection, source: &str, session: &Session) -> R
     let cache_read_tokens = sqlite_token_count(session.usage.cache_read_tokens)?;
     let cache_write_tokens = sqlite_token_count(session.usage.cache_write_tokens)?;
     connection.execute(
-        "INSERT INTO session VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17)
+        "INSERT INTO session
+           (source, id, parent_id, project_id, project_name, project_worktree, title,
+            provider_id, model_id, variant, cost, input_tokens, output_tokens, reasoning_tokens,
+            cache_read_tokens, cache_write_tokens, created_at_ms, updated_at_ms)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
          ON CONFLICT(source, id) DO UPDATE SET project_id=excluded.project_id, project_name=excluded.project_name,
-         project_worktree=excluded.project_worktree, title=excluded.title, provider_id=excluded.provider_id,
+         parent_id=excluded.parent_id, project_worktree=excluded.project_worktree, title=excluded.title,
+         provider_id=excluded.provider_id,
          model_id=excluded.model_id, variant=excluded.variant, cost=excluded.cost, input_tokens=excluded.input_tokens,
          output_tokens=excluded.output_tokens, reasoning_tokens=excluded.reasoning_tokens,
          cache_read_tokens=excluded.cache_read_tokens, cache_write_tokens=excluded.cache_write_tokens,
          created_at_ms=excluded.created_at_ms, updated_at_ms=excluded.updated_at_ms",
-        params![source, session.id, session.project.id, session.project.name, session.project.worktree,
-             session.title, session.model.as_ref().map(|model| &model.provider_id), session.model.as_ref().map(|model| &model.model_id),
-             session.model.as_ref().and_then(|model| model.variant.as_ref()), session.usage.cost, input_tokens,
+         params![source, session.id, session.parent_id, session.project.id, session.project.name, session.project.worktree,
+              session.title, session.model.as_ref().map(|model| &model.provider_id), session.model.as_ref().map(|model| &model.model_id),
+              session.model.as_ref().and_then(|model| model.variant.as_ref()), session.usage.cost, input_tokens,
              output_tokens, reasoning_tokens, cache_read_tokens, cache_write_tokens, session.created_at_ms, session.updated_at_ms],
     )?;
     Ok(())
@@ -966,6 +986,7 @@ mod tests {
     fn session(id: &str) -> Session {
         Session {
             id: id.into(),
+            parent_id: None,
             project: Project {
                 id: "project-1".into(),
                 name: Some("ocstats".into()),
@@ -1045,7 +1066,7 @@ mod tests {
         extraction.steps[0].usage = usage(4.0, 40);
         store.import(&extraction).unwrap();
 
-        assert_eq!(store.source_schema_version(&source).unwrap(), Some(2));
+        assert_eq!(store.source_schema_version(&source).unwrap(), Some(3));
         let detail = store
             .session_detail(&source.to_string_lossy(), "session-steps")
             .unwrap()
@@ -1063,6 +1084,7 @@ mod tests {
                     project_id: "project-1".into(),
                     title: "session-message".into(),
                     created_at_ms: 1,
+                    parent_id: None,
                     usage: usage(2.0, 20),
                     models: vec![ModelUsage {
                         provider_id: "openai".into(),
@@ -1078,6 +1100,7 @@ mod tests {
                     project_id: "project-1".into(),
                     title: "session-steps".into(),
                     created_at_ms: 1,
+                    parent_id: None,
                     usage: usage(4.0, 40),
                     models: vec![ModelUsage {
                         provider_id: "openai".into(),
@@ -1160,6 +1183,91 @@ mod tests {
         );
         assert_eq!(sessions[0].created_at_ms, 10);
         assert_eq!(sessions[1].created_at_ms, 20);
+    }
+
+    #[test]
+    fn persists_and_updates_session_parent_id() {
+        let directory = tempdir().unwrap();
+        let source = PathBuf::from("/data/opencode.db");
+        let mut parent = session("session-parent");
+        parent.created_at_ms = 10;
+        let mut child = session("session-child");
+        child.created_at_ms = 20;
+        child.parent_id = Some(parent.id.clone());
+        let mut extraction = Extraction {
+            source: source.clone(),
+            sessions: vec![parent, child],
+            ..Extraction::default()
+        };
+        let mut store = AnalyticsStore::open(directory.path().join("analytics.db")).unwrap();
+
+        store.import(&extraction).unwrap();
+
+        let usage = store.session_usage().unwrap();
+        assert_eq!(usage[1].parent_id.as_deref(), Some("session-parent"));
+        assert_eq!(
+            store
+                .session_detail(&source.to_string_lossy(), "session-child")
+                .unwrap()
+                .unwrap()
+                .parent_id
+                .as_deref(),
+            Some("session-parent")
+        );
+
+        extraction.sessions[1].parent_id = None;
+        store.import(&extraction).unwrap();
+
+        assert_eq!(store.session_usage().unwrap()[1].parent_id, None);
+        assert_eq!(
+            store
+                .session_detail(&source.to_string_lossy(), "session-child")
+                .unwrap()
+                .unwrap()
+                .parent_id,
+            None
+        );
+    }
+
+    #[test]
+    fn migrates_existing_analytics_session_table() {
+        let directory = tempdir().unwrap();
+        let path = directory.path().join("analytics.db");
+        let connection = Connection::open(&path).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE source (
+                   path TEXT PRIMARY KEY, schema_version INTEGER NOT NULL,
+                   schema_signature TEXT NOT NULL, imported_at_ms INTEGER NOT NULL
+                 );
+                 CREATE TABLE session (
+                   source TEXT NOT NULL, id TEXT NOT NULL, project_id TEXT NOT NULL,
+                   project_name TEXT, project_worktree TEXT NOT NULL, title TEXT NOT NULL,
+                   provider_id TEXT, model_id TEXT, variant TEXT, cost REAL,
+                   input_tokens INTEGER NOT NULL, output_tokens INTEGER NOT NULL,
+                   reasoning_tokens INTEGER NOT NULL, cache_read_tokens INTEGER NOT NULL,
+                   cache_write_tokens INTEGER NOT NULL, created_at_ms INTEGER NOT NULL,
+                   updated_at_ms INTEGER NOT NULL, PRIMARY KEY (source, id)
+                 );
+                 INSERT INTO source VALUES ('/data/opencode.db', 2, 'legacy', 1);
+                 INSERT INTO session VALUES ('/data/opencode.db', 'session-1', 'project-1',
+                   'project', '/work', 'legacy', NULL, NULL, NULL, NULL, 0, 0, 0, 0, 0, 1, 2);",
+            )
+            .unwrap();
+        drop(connection);
+
+        let store = AnalyticsStore::open(&path).unwrap();
+        let columns = store
+            .connection
+            .prepare("PRAGMA table_info(session)")
+            .unwrap()
+            .query_map([], |row| row.get::<_, String>(1))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+
+        assert!(columns.iter().any(|column| column == "parent_id"));
+        assert_eq!(store.session_usage().unwrap().len(), 1);
     }
 
     #[test]

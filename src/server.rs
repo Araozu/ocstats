@@ -522,7 +522,7 @@ mod tests {
                     id TEXT, project_id TEXT, title TEXT, model TEXT, cost REAL,
                     tokens_input INTEGER, tokens_output INTEGER, tokens_reasoning INTEGER,
                     tokens_cache_read INTEGER, tokens_cache_write INTEGER,
-                    time_created INTEGER, time_updated INTEGER
+                    time_created INTEGER, time_updated INTEGER, parent_id TEXT
                  );
                  CREATE TABLE message (
                     id TEXT, session_id TEXT, data TEXT, time_created INTEGER, time_updated INTEGER
