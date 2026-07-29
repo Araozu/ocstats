@@ -1,6 +1,7 @@
 import type { Project, SessionUsage, Usage } from '$lib/api/ocstats';
 
 export type SessionSortDirection = 'asc' | 'desc';
+export type ProjectSortMode = 'name' | 'recent';
 
 export type SessionTreeNode = {
 	key: string;
@@ -30,8 +31,35 @@ export function addUsage(left: Usage, right: Usage): Usage {
 	};
 }
 
-export const projectKey = (project: Project) => `${project.source}:${project.id}`;
+export const projectKey = (project: Pick<Project, 'source' | 'id'>) =>
+	`${project.source}:${project.id}`;
 export const sessionKey = (source: string, sessionId: string) => `${source}:${sessionId}`;
+
+export function sortProjects(
+	projects: Project[],
+	sessions: SessionUsage[],
+	mode: ProjectSortMode
+): Project[] {
+	const latestSessionByProject = new Map<string, number>();
+	for (const session of sessions) {
+		const key = projectKey({ source: session.source, id: session.project_id });
+		const latest = latestSessionByProject.get(key);
+		if (latest === undefined || session.created_at_ms > latest) {
+			latestSessionByProject.set(key, session.created_at_ms);
+		}
+	}
+
+	return [...projects].sort((left, right) => {
+		if (mode === 'recent') {
+			const leftDate = latestSessionByProject.get(projectKey(left)) ?? -Infinity;
+			const rightDate = latestSessionByProject.get(projectKey(right)) ?? -Infinity;
+			if (leftDate !== rightDate) return rightDate - leftDate;
+		}
+
+		const labelComparison = projectLabel(left).localeCompare(projectLabel(right));
+		return labelComparison || projectKey(left).localeCompare(projectKey(right));
+	});
+}
 
 export function sortSessionsByDate(
 	sessions: SessionUsage[],

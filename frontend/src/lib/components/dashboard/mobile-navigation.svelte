@@ -9,6 +9,7 @@
 	import MonitorIcon from 'phosphor-svelte/lib/MonitorIcon';
 	import MoonIcon from 'phosphor-svelte/lib/MoonIcon';
 	import SunIcon from 'phosphor-svelte/lib/SunIcon';
+	import SortAscendingIcon from 'phosphor-svelte/lib/SortAscendingIcon';
 	import type { Project, SessionUsage } from '$lib/api/ocstats';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
@@ -17,7 +18,7 @@
 	import * as Sheet from '$lib/components/ui/sheet';
 	import { resetMode, setMode } from 'mode-watcher';
 	import { SvelteSet } from 'svelte/reactivity';
-	import { projectKey, projectLabel } from './format';
+	import { projectKey, projectLabel, type ProjectSortMode } from './format';
 	import SessionTree from './session-tree.svelte';
 
 	let {
@@ -34,6 +35,8 @@
 		onImport,
 		onOverview,
 		onProjectSelect,
+		projectSortMode,
+		onProjectSortModeChange,
 		onSessionSelect,
 		onToggleSort,
 		onAncestorsRevealed
@@ -51,6 +54,8 @@
 		onImport: () => void;
 		onOverview: () => void;
 		onProjectSelect: (key: string) => void;
+		projectSortMode: ProjectSortMode;
+		onProjectSortModeChange: (mode: ProjectSortMode) => void;
 		onSessionSelect: (session: SessionUsage) => void;
 		onToggleSort: () => void;
 		onAncestorsRevealed: (sessionKey: string) => void;
@@ -115,7 +120,34 @@
 							>
 								Projects
 							</p>
-							<Badge variant="secondary">{projects.length}</Badge>
+							<div class="flex items-center gap-1">
+								<Badge variant="secondary">{projects.length}</Badge>
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger
+										class={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+										aria-label="Sort projects"
+										title={projectSortMode === 'name'
+											? 'Projects sorted by name'
+											: 'Projects sorted by most recent'}
+									>
+										<SortAscendingIcon />
+									</DropdownMenu.Trigger>
+									<DropdownMenu.Content align="end">
+										<DropdownMenu.Label>Sort projects</DropdownMenu.Label>
+										<DropdownMenu.RadioGroup value={projectSortMode}>
+											<DropdownMenu.RadioItem
+												value="name"
+												onclick={() => onProjectSortModeChange('name')}>Name</DropdownMenu.RadioItem
+											>
+											<DropdownMenu.RadioItem
+												value="recent"
+												onclick={() => onProjectSortModeChange('recent')}
+												>Most recent</DropdownMenu.RadioItem
+											>
+										</DropdownMenu.RadioGroup>
+									</DropdownMenu.Content>
+								</DropdownMenu.Root>
+							</div>
 						</div>
 						<div class="space-y-1">
 							<button

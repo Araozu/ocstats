@@ -6,13 +6,14 @@
 	import MonitorIcon from 'phosphor-svelte/lib/MonitorIcon';
 	import MoonIcon from 'phosphor-svelte/lib/MoonIcon';
 	import SidebarSimpleIcon from 'phosphor-svelte/lib/SidebarSimpleIcon';
+	import SortAscendingIcon from 'phosphor-svelte/lib/SortAscendingIcon';
 	import SunIcon from 'phosphor-svelte/lib/SunIcon';
 	import type { Project } from '$lib/api/ocstats';
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
 	import { resetMode, setMode } from 'mode-watcher';
-	import { projectKey, projectLabel } from './format';
+	import { projectKey, projectLabel, type ProjectSortMode } from './format';
 
 	let {
 		projects,
@@ -22,6 +23,8 @@
 		collapsed = false,
 		onImport,
 		onSelect,
+		projectSortMode,
+		onProjectSortModeChange,
 		onToggle
 	}: {
 		projects: Project[];
@@ -31,6 +34,8 @@
 		collapsed?: boolean;
 		onImport: () => void;
 		onSelect: (key: string) => void;
+		projectSortMode: ProjectSortMode;
+		onProjectSortModeChange: (mode: ProjectSortMode) => void;
 		onToggle: () => void;
 	} = $props();
 </script>
@@ -60,10 +65,34 @@
 	</div>
 	<div class="flex min-h-0 flex-1 flex-col {collapsed ? 'p-2' : 'p-4'}">
 		<div class="mb-2 flex items-center justify-between px-2" class:hidden={collapsed}>
-			<p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-				Projects
-			</p>
-			<Badge variant="secondary">{projects.length}</Badge>
+			<div class="flex min-w-0 items-center gap-2">
+				<p class="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+					Projects
+				</p>
+				<Badge variant="secondary">{projects.length}</Badge>
+			</div>
+			<DropdownMenu.Root>
+				<DropdownMenu.Trigger
+					class={buttonVariants({ variant: 'ghost', size: 'icon-sm' })}
+					aria-label="Sort projects"
+					title={projectSortMode === 'name'
+						? 'Projects sorted by name'
+						: 'Projects sorted by most recent'}
+				>
+					<SortAscendingIcon />
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content align="end">
+					<DropdownMenu.Label>Sort projects</DropdownMenu.Label>
+					<DropdownMenu.RadioGroup value={projectSortMode}>
+						<DropdownMenu.RadioItem value="name" onclick={() => onProjectSortModeChange('name')}
+							>Name</DropdownMenu.RadioItem
+						>
+						<DropdownMenu.RadioItem value="recent" onclick={() => onProjectSortModeChange('recent')}
+							>Most recent</DropdownMenu.RadioItem
+						>
+					</DropdownMenu.RadioGroup>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
 		</div>
 		<div
 			class="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-1 {collapsed

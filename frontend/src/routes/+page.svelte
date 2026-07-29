@@ -9,8 +9,10 @@
 		emptyUsage,
 		projectKey,
 		projectLabel,
+		sortProjects,
 		sessionKey,
-		sortSessionsByDate
+		sortSessionsByDate,
+		type ProjectSortMode
 	} from '$lib/components/dashboard/format';
 	import Overview from '$lib/components/dashboard/overview.svelte';
 	import DashboardSkeleton from '$lib/components/dashboard/dashboard-skeleton.svelte';
@@ -38,6 +40,8 @@
 	$effect(() => modelPricing.set(pricing, pricingQuery.data !== undefined));
 	let projectsCollapsed = $state(false);
 	let sessionSortDirection = $state<'asc' | 'desc'>('desc');
+	let projectSortMode = $state<ProjectSortMode>('name');
+	const sortedProjects = $derived(sortProjects(projects, sessions, projectSortMode));
 	let previousProjectKey = $state<string | undefined>(undefined);
 	let expandedSessionKeys = new SvelteSet<string>();
 	let revealedSessionKey = $state<string | null>(null);
@@ -132,6 +136,10 @@
 		sessionSortDirection = sessionSortDirection === 'desc' ? 'asc' : 'desc';
 	}
 
+	function setProjectSortMode(mode: ProjectSortMode) {
+		projectSortMode = mode;
+	}
+
 	async function importDashboard() {
 		importError = null;
 		isImporting = true;
@@ -205,7 +213,7 @@
 		</main>
 	{:else}
 		<MobileNavigation
-			{projects}
+			projects={sortedProjects}
 			sessions={visibleSessions}
 			{projectName}
 			{selectedProjectKey}
@@ -218,6 +226,8 @@
 			onImport={importDashboard}
 			onOverview={() => updateSelection({ source: null, session_id: null })}
 			onProjectSelect={selectProject}
+			onProjectSortModeChange={setProjectSortMode}
+			{projectSortMode}
 			onSessionSelect={selectSession}
 			onToggleSort={toggleSessionSort}
 			onAncestorsRevealed={(key) => (revealedSessionKey = key)}
@@ -229,13 +239,15 @@
 		>
 			<div class="hidden xl:sticky xl:top-0 xl:block xl:h-dvh xl:self-start">
 				<ProjectSidebar
-					{projects}
+					projects={sortedProjects}
 					{selectedProjectKey}
 					{lastUpdated}
 					{isImporting}
 					collapsed={projectsCollapsed}
 					onImport={importDashboard}
 					onSelect={selectProject}
+					onProjectSortModeChange={setProjectSortMode}
+					{projectSortMode}
 					onToggle={() => (projectsCollapsed = !projectsCollapsed)}
 				/>
 			</div>

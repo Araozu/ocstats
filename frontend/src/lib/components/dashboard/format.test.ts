@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import type { SessionUsage } from '$lib/api/ocstats';
+import type { Project, SessionUsage } from '$lib/api/ocstats';
 import {
 	buildSessionTree,
 	sessionAncestorKeys,
 	sessionRevealState,
+	sortProjects,
 	sortSessionsByDate
 } from './format';
 
@@ -63,6 +64,36 @@ describe('sortSessionsByDate', () => {
 		expect(sortSessionsByDate(tied, 'asc').map((item) => item.source)).toEqual([
 			'/data/a.db',
 			'/data/b.db'
+		]);
+	});
+});
+
+describe('sortProjects', () => {
+	const projects: Project[] = [
+		{ source: 'local', id: 'a', name: 'Zeta', worktree: '/zeta' },
+		{ source: 'local', id: 'b', name: 'Alpha', worktree: '/alpha' },
+		{ source: 'local', id: 'c', name: 'No sessions', worktree: '/none' }
+	];
+
+	const sessions = [
+		session('local', 'new', 30),
+		{ ...session('local', 'old', 10), project_id: 'b' },
+		{ ...session('local', 'newer', 40), project_id: 'a' }
+	];
+
+	it('sorts by display name by default', () => {
+		expect(sortProjects(projects, sessions, 'name').map((project) => project.id)).toEqual([
+			'b',
+			'c',
+			'a'
+		]);
+	});
+
+	it('sorts by latest session and keeps projects without sessions last', () => {
+		expect(sortProjects(projects, sessions, 'recent').map((project) => project.id)).toEqual([
+			'a',
+			'b',
+			'c'
 		]);
 	});
 });
