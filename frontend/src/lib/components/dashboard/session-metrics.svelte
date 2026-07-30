@@ -31,21 +31,7 @@
 		return total;
 	}
 
-	const totalCost = $derived.by(() => {
-		const costs = [
-			metricCost('input'),
-			metricCost('cached_read'),
-			metricCost('cached_write'),
-			metricCost('reasoning'),
-			metricCost('output')
-		];
-		let total = 0;
-		for (const cost of costs) {
-			if (cost == null) return null;
-			total += cost;
-		}
-		return total;
-	});
+	const totalCost = $derived($pricingStore.totalCost(session.models));
 	const metrics = $derived([
 		{ label: 'Input tokens', value: session.usage.input_tokens, cost: metricCost('input') },
 		{
@@ -57,6 +43,11 @@
 			label: 'Cache write tokens',
 			value: session.usage.cache_write_tokens,
 			cost: metricCost('cached_write')
+		},
+		{
+			label: 'Reasoning tokens',
+			value: session.usage.reasoning_tokens,
+			cost: metricCost('reasoning')
 		},
 		{ label: 'Output tokens', value: session.usage.output_tokens, cost: metricCost('output') },
 		{ label: 'Total cost', value: formatCost(totalCost) }

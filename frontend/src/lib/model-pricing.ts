@@ -1,8 +1,8 @@
 import { getContext, setContext } from 'svelte';
 import { derived, writable, type Readable } from 'svelte/store';
-import type { Model, ModelPricing, ModelUsage, PricePeriod } from '$lib/api/ocstats';
+import type { Model, ModelPricing, ModelUsage, PricePeriod, Usage } from '$lib/api/ocstats';
 
-export type PricingRate = 'input' | 'cached_read' | 'cached_write' | 'output';
+export type PricingRate = 'input' | 'cached_read' | 'cached_write' | 'reasoning' | 'output';
 
 type PricedModel = Pick<Model, 'provider_id' | 'model_id'>;
 
@@ -11,6 +11,7 @@ export type ModelPricingSnapshot = {
 	history(model: PricedModel): ModelPricing | undefined;
 	find(model: PricedModel, atMs: number): PricePeriod | undefined;
 	cost(model: PricedModel, tokens: number, rate: PricingRate, atMs: number): number | null;
+	usageCost(model: PricedModel, usage: Usage, atMs: number): number | null;
 	totalCost(models: ModelUsage[]): number | null;
 };
 
@@ -58,7 +59,7 @@ function createSnapshot([pricing, loaded]: [ModelPricing[], boolean]): ModelPric
 
 	function find(model: PricedModel, atMs: number) {
 		const modelHistory = history(model);
-		let selected: PricePeriod | undefined;
+		let selected = modelHistory?.prices?.[0];
 		let selectedAt = -Infinity;
 		for (const price of modelHistory?.prices ?? []) {
 			const effectiveAt = Date.parse(price.effective_from);
@@ -72,25 +73,35 @@ function createSnapshot([pricing, loaded]: [ModelPricing[], boolean]): ModelPric
 
 	function thisCost(model: PricedModel, tokens: number, rate: PricingRate, atMs: number) {
 		if (tokens === 0) return 0;
-		const price = find(model, atMs)?.[rate];
+		const period = find(model, atMs);
+		const price = rate === 'reasoning' ? period?.output : period?.[rate];
 		return price == null ? null : (tokens * price) / 1_000_000;
+	}
+
+	function usageCost(model: PricedModel, usage: Usage, atMs: number) {
+		let total = 0;
+		for (const [tokens, rate] of [
+			[usage.input_tokens, 'input'],
+			[usage.cache_read_tokens, 'cached_read'],
+			[usage.cache_write_tokens, 'cached_write'],
+			[usage.reasoning_tokens, 'reasoning'],
+			[usage.output_tokens, 'output']
+		] as const) {
+			if (tokens === 0) continue;
+			const modelCost = thisCost(model, tokens, rate, atMs);
+			if (modelCost == null) return null;
+			total += modelCost;
+		}
+		return total;
 	}
 
 	function totalCost(models: ModelUsage[]) {
 		if (models.length === 0) return null;
 		let total = 0;
 		for (const model of models) {
-			for (const [tokens, rate] of [
-				[model.usage.input_tokens, 'input'],
-				[model.usage.cache_read_tokens, 'cached_read'],
-				[model.usage.cache_write_tokens, 'cached_write'],
-				[model.usage.output_tokens, 'output']
-			] as const) {
-				if (tokens === 0) continue;
-				const modelCost = thisCost(model, tokens, rate, model.created_at_ms);
-				if (modelCost == null) return null;
-				total += modelCost;
-			}
+			const modelCost = usageCost(model, model.usage, model.created_at_ms);
+			if (modelCost == null) return null;
+			total += modelCost;
 		}
 		return total;
 	}
@@ -102,6 +113,7 @@ function createSnapshot([pricing, loaded]: [ModelPricing[], boolean]): ModelPric
 		cost(model, tokens, rate, atMs) {
 			return thisCost(model, tokens, rate, atMs);
 		},
+		usageCost,
 		totalCost
 	};
 }

@@ -25,18 +25,7 @@
 
 	function turnCost(turn: Turn) {
 		if (!turn.model) return null;
-		let total = 0;
-		for (const [tokens, rate] of [
-			[turn.usage.input_tokens, 'input'],
-			[turn.usage.cache_read_tokens, 'cached_read'],
-			[turn.usage.cache_write_tokens, 'cached_write'],
-			[turn.usage.output_tokens, 'output']
-		] as const) {
-			const cost = $pricingStore.cost(turn.model, tokens, rate, turn.created_at_ms);
-			if (cost == null && tokens > 0) return null;
-			total += cost ?? 0;
-		}
-		return total;
+		return $pricingStore.usageCost(turn.model, turn.usage, turn.created_at_ms);
 	}
 
 	function userMessageCost(startIndex: number) {
@@ -69,7 +58,8 @@
 					><TableHead class="hidden sm:table-cell">Activity</TableHead><TableHead>Input</TableHead
 					><TableHead class="hidden sm:table-cell">Cache read</TableHead><TableHead
 						class="hidden sm:table-cell">Cache write</TableHead
-					><TableHead>Output</TableHead><TableHead class="pr-5 text-right">Pricing</TableHead
+					><TableHead>Reasoning</TableHead><TableHead>Output</TableHead><TableHead
+						class="pr-5 text-right">Pricing</TableHead
 					><TableHead>Actions</TableHead></TableRow
 				></TableHeader
 			>
@@ -87,7 +77,7 @@
 						/>{/if}
 					<SessionTurnRow {turn} {index} source={session.source} sessionId={session.session_id} />
 				{:else}<TableRow
-						><TableCell colspan={9} class="h-24 text-center text-muted-foreground"
+						><TableCell colspan={10} class="h-24 text-center text-muted-foreground"
 							>No completed turns.</TableCell
 						></TableRow
 					>{/each}

@@ -6,7 +6,7 @@ models:
   - provider: openai
     slug: gpt-5.5
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 5.0
         cached_write: null
         cached_read: 0.5
@@ -14,7 +14,7 @@ models:
   - provider: openai
     slug: gpt-5.5-pro
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 30.0
         cached_write: null
         cached_read: null
@@ -22,7 +22,7 @@ models:
   - provider: openai
     slug: gpt-5.4
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 2.5
         cached_write: null
         cached_read: 0.25
@@ -30,7 +30,7 @@ models:
   - provider: openai
     slug: gpt-5.4-pro
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 30.0
         cached_write: null
         cached_read: null
@@ -38,7 +38,7 @@ models:
   - provider: openai
     slug: gpt-5.3-codex
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 1.75
         cached_write: null
         cached_read: 0.175
@@ -46,15 +46,20 @@ models:
   - provider: openai
     slug: gpt-5.6-luna
     prices:
-      - effective_from: "2026-07-10T03:44:55Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 1.0
         cached_write: 1.25
         cached_read: 0.1
         output: 6.0
+      - effective_from: "2026-07-30T19:50:40Z"
+        input: 0.20
+        cached_write: 0.25
+        cached_read: 0.02
+        output: 1.20
   - provider: openai
     slug: gpt-5.6-sol
     prices:
-      - effective_from: "2026-07-10T03:44:55Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 5.0
         cached_write: 6.25
         cached_read: 0.5
@@ -62,17 +67,22 @@ models:
   - provider: openai
     slug: gpt-5.6-terra
     prices:
-      - effective_from: "2026-07-10T03:44:55Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 2.5
         cached_write: 3.125
         cached_read: 0.25
         output: 15.0
+      - effective_from: "2026-07-30T19:50:40Z"
+        input: 2.0
+        cached_write: 2.5
+        cached_read: 0.20
+        output: 12.0
 
   # Anthropic: newest Claude API models
   - provider: anthropic
     slug: claude-fable-5
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 10.0
         cached_write: 12.5
         cached_read: 1.0
@@ -80,7 +90,7 @@ models:
   - provider: anthropic
     slug: claude-mythos-5
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 10.0
         cached_write: 12.5
         cached_read: 1.0
@@ -88,7 +98,7 @@ models:
   - provider: anthropic
     slug: claude-opus-4-8
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 5.0
         cached_write: 6.25
         cached_read: 0.5
@@ -96,7 +106,7 @@ models:
   - provider: anthropic
     slug: claude-opus-4-7
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 5.0
         cached_write: 6.25
         cached_read: 0.5
@@ -104,7 +114,7 @@ models:
   - provider: anthropic
     slug: claude-opus-4-6
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 5.0
         cached_write: 6.25
         cached_read: 0.5
@@ -112,7 +122,7 @@ models:
   - provider: anthropic
     slug: claude-opus-4.6
     prices:
-      - effective_from: "2026-07-10T03:44:55Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 5.0
         cached_write: 6.25
         cached_read: 0.5
@@ -120,7 +130,7 @@ models:
   - provider: anthropic
     slug: claude-sonnet-4.6
     prices:
-      - effective_from: "2026-07-10T03:44:55Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 3.0
         cached_write: 3.75
         cached_read: 0.3
@@ -128,7 +138,7 @@ models:
   - provider: anthropic
     slug: claude-sonnet-4-6
     prices:
-      - effective_from: "2026-07-10T04:04:00Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 3.0
         cached_write: 3.75
         cached_read: 0.3
@@ -138,7 +148,7 @@ models:
   - provider: google
     slug: gemini-3.5-flash
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 1.5
         cached_write: null
         cached_read: 0.15
@@ -146,7 +156,7 @@ models:
   - provider: google
     slug: gemini-3.1-pro-preview
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 2.0
         cached_write: null
         cached_read: 0.2
@@ -154,7 +164,7 @@ models:
   - provider: google
     slug: gemini-3.1-flash-lite
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.25
         cached_write: null
         cached_read: 0.025
@@ -162,7 +172,7 @@ models:
   - provider: google
     slug: gemini-3-flash-preview
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.5
         cached_write: null
         cached_read: 0.05
@@ -170,7 +180,7 @@ models:
   - provider: google
     slug: gemini-3-flash
     prices:
-      - effective_from: "2026-07-10T03:44:55Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.5
         cached_write: null
         cached_read: 0.05
@@ -178,7 +188,7 @@ models:
   - provider: google
     slug: gemini-2.5-pro
     prices:
-      - effective_from: "2026-07-10T00:23:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 1.25
         cached_write: null
         cached_read: 0.125
@@ -186,7 +196,7 @@ models:
   - provider: google
     slug: gemini-3-pro
     prices:
-      - effective_from: "2026-07-10T04:04:00Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 2.0
         cached_write: null
         cached_read: 0.2
@@ -196,7 +206,7 @@ models:
   - provider: moonshot
     slug: kimi-k2.6
     prices:
-      - effective_from: "2026-07-10T03:44:55Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.95
         cached_write: null
         cached_read: 0.16
@@ -204,7 +214,7 @@ models:
   - provider: moonshot
     slug: k2p6
     prices:
-      - effective_from: "2026-07-20T14:44:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.95
         cached_write: null
         cached_read: 0.16
@@ -212,7 +222,7 @@ models:
   - provider: moonshot
     slug: k2p7
     prices:
-      - effective_from: "2026-07-10T04:04:00Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.95
         cached_write: null
         cached_read: 0.16
@@ -220,7 +230,7 @@ models:
   - provider: moonshot
     slug: kimi-k2.5
     prices:
-      - effective_from: "2026-07-10T04:04:00Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.6
         cached_write: null
         cached_read: 0.15
@@ -230,7 +240,7 @@ models:
   - provider: minimax
     slug: minimax-m2.5-free
     prices:
-      - effective_from: "2026-07-10T03:44:55Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.3
         cached_write: 0.375
         cached_read: 0.03
@@ -238,7 +248,7 @@ models:
   - provider: minimax
     slug: minimax-m2.7
     prices:
-      - effective_from: "2026-07-10T04:04:00Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.3
         cached_write: 0.375
         cached_read: 0.06
@@ -247,7 +257,7 @@ models:
   - provider: xiaomi
     slug: mimo-v2.5-free
     prices:
-      - effective_from: "2026-07-20T14:44:34Z"
+      - effective_from: "2020-01-01T00:00:00Z"
         input: 0.14
         cached_write: null
         cached_read: 0.002

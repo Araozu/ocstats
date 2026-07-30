@@ -39,7 +39,7 @@
 </script>
 
 <TableRow class="bg-primary/15 hover:bg-primary/25">
-	<TableCell colspan={8} class="px-5 py-3">
+	<TableCell colspan={9} class="px-5 py-3">
 		<div class="flex items-center justify-between gap-4">
 			<p class="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
 				User message

@@ -253,7 +253,8 @@ impl AnalyticsStore {
             "WITH usage_records AS (
                 SELECT COALESCE(am.provider_id, 'unknown') AS provider_id,
                        COALESCE(am.model_id, 'unknown') AS model_id,
-                       am.variant, cs.created_at_ms, cs.cost,
+                        am.variant AS variant,
+                        COALESCE(am.created_at_ms, cs.created_at_ms) AS created_at_ms, cs.cost,
                        cs.input_tokens, cs.output_tokens, cs.reasoning_tokens,
                        cs.cache_read_tokens, cs.cache_write_tokens, cs.total_tokens
                 FROM completed_step cs
@@ -295,27 +296,12 @@ impl AnalyticsStore {
 
     pub fn model_usage_filtered(&self, filter: &UsageFilter) -> Result<Vec<ModelUsage>, Error> {
         let (where_clause, values) = model_usage_filter(filter);
-        let message_where_clause = if where_clause.is_empty() {
-            "WHERE NOT EXISTS (
-                SELECT 1 FROM completed_step cs
-                WHERE cs.source = am.source AND cs.session_id = am.session_id
-              )"
-            .to_owned()
-        } else {
-            format!(
-                "{where_clause} AND NOT EXISTS (
-                    SELECT 1 FROM completed_step cs
-                    WHERE cs.source = am.source AND cs.session_id = am.session_id
-                  )"
-            )
-        };
-        let mut query_values = values.clone();
-        query_values.extend(values);
         let mut statement = self.connection.prepare(&format!(
             "WITH usage_records AS (
-                SELECT COALESCE(am.provider_id, 'unknown') AS provider_id,
-                       COALESCE(am.model_id, 'unknown') AS model_id,
-                       am.variant, cs.created_at_ms, cs.cost,
+                 SELECT cs.source, s.project_id,
+                        COALESCE(am.provider_id, 'unknown') AS provider_id,
+                        COALESCE(am.model_id, 'unknown') AS model_id,
+                        am.variant, COALESCE(am.created_at_ms, cs.created_at_ms) AS created_at_ms, cs.cost,
                        cs.input_tokens, cs.output_tokens, cs.reasoning_tokens,
                        cs.cache_read_tokens, cs.cache_write_tokens, cs.total_tokens
                 FROM completed_step cs
@@ -323,24 +309,28 @@ impl AnalyticsStore {
                   ON am.source = cs.source AND am.id = cs.message_id
                  AND am.session_id = cs.session_id
                 JOIN session s ON s.source = cs.source AND s.id = cs.session_id
-                {where_clause}
-                UNION ALL
-                SELECT am.provider_id, am.model_id, am.variant, am.created_at_ms, am.cost,
+                 UNION ALL
+                 SELECT am.source, s.project_id, am.provider_id, am.model_id, am.variant,
+                        am.created_at_ms, am.cost,
                        am.input_tokens, am.output_tokens, am.reasoning_tokens,
                        am.cache_read_tokens, am.cache_write_tokens, am.total_tokens
                 FROM assistant_message am
                 JOIN session s ON s.source = am.source AND s.id = am.session_id
-                {message_where_clause}
+                 WHERE NOT EXISTS (
+                     SELECT 1 FROM completed_step cs
+                     WHERE cs.source = am.source AND cs.session_id = am.session_id
+                 )
              )
              SELECT provider_id, model_id, variant, created_at_ms, SUM(cost), SUM(input_tokens),
                     SUM(output_tokens), SUM(reasoning_tokens), SUM(cache_read_tokens),
                     SUM(cache_write_tokens), SUM(total_tokens)
-             FROM usage_records
-             GROUP BY provider_id, model_id, variant, created_at_ms
+              FROM usage_records
+              {where_clause}
+              GROUP BY provider_id, model_id, variant, created_at_ms
              ORDER BY provider_id, model_id, variant, created_at_ms"
         ))?;
         statement
-            .query_map(rusqlite::params_from_iter(query_values), |row| {
+            .query_map(rusqlite::params_from_iter(values), |row| {
                 Ok(ModelUsage {
                     provider_id: row.get(0)?,
                     model_id: row.get(1)?,
@@ -398,7 +388,7 @@ impl AnalyticsStore {
             "SELECT cs.id, cs.message_id, am.provider_id, am.model_id, am.variant,
                     cs.types, cs.reason, um.text, cs.cost, cs.input_tokens, cs.output_tokens, cs.reasoning_tokens,
                     cs.cache_read_tokens, cs.cache_write_tokens, cs.total_tokens,
-                    cs.created_at_ms, cs.updated_at_ms
+                     COALESCE(am.created_at_ms, cs.created_at_ms), cs.updated_at_ms
              FROM completed_step cs
              LEFT JOIN assistant_message am
                ON am.source = cs.source AND am.id = cs.message_id
@@ -512,7 +502,7 @@ impl AnalyticsStore {
         let (where_clause, mut values) = usage_filter(filter);
         values.insert(0, SqlValue::Integer(period_ms));
         let mut statement = self.connection.prepare(&format!(
-            "SELECT su.source, (s.created_at_ms / ?1) * ?1 AS start_at_ms, COUNT(*) AS sessions,
+            "SELECT su.source, (s.updated_at_ms / ?1) * ?1 AS start_at_ms, COUNT(*) AS sessions,
                     SUM(su.cost), SUM(su.input_tokens), SUM(su.output_tokens), SUM(su.reasoning_tokens),
                     SUM(su.cache_read_tokens), SUM(su.cache_write_tokens), SUM(su.total_tokens)
              FROM session_usage su JOIN session s ON s.source = su.source AND s.id = su.session_id
@@ -726,11 +716,11 @@ fn usage_filter(filter: &UsageFilter) -> (String, Vec<SqlValue>) {
         values.push(SqlValue::Text(model_id.clone()));
     }
     if let Some(start_at_ms) = filter.start_at_ms {
-        conditions.push("s.created_at_ms >= ?".to_owned());
+        conditions.push("s.updated_at_ms >= ?".to_owned());
         values.push(SqlValue::Integer(start_at_ms));
     }
     if let Some(end_at_ms) = filter.end_at_ms {
-        conditions.push("s.created_at_ms < ?".to_owned());
+        conditions.push("s.updated_at_ms < ?".to_owned());
         values.push(SqlValue::Integer(end_at_ms));
     }
     let where_clause = if conditions.is_empty() {
@@ -745,27 +735,27 @@ fn model_usage_filter(filter: &UsageFilter) -> (String, Vec<SqlValue>) {
     let mut conditions = Vec::new();
     let mut values = Vec::new();
     if let Some(source) = &filter.source {
-        conditions.push("s.source = ?".to_owned());
+        conditions.push("source = ?".to_owned());
         values.push(SqlValue::Text(source.clone()));
     }
     if let Some(project_id) = &filter.project_id {
-        conditions.push("s.project_id = ?".to_owned());
+        conditions.push("project_id = ?".to_owned());
         values.push(SqlValue::Text(project_id.clone()));
     }
     if let Some(provider_id) = &filter.provider_id {
-        conditions.push("COALESCE(am.provider_id, 'unknown') = ?".to_owned());
+        conditions.push("provider_id = ?".to_owned());
         values.push(SqlValue::Text(provider_id.clone()));
     }
     if let Some(model_id) = &filter.model_id {
-        conditions.push("COALESCE(am.model_id, 'unknown') = ?".to_owned());
+        conditions.push("model_id = ?".to_owned());
         values.push(SqlValue::Text(model_id.clone()));
     }
     if let Some(start_at_ms) = filter.start_at_ms {
-        conditions.push("s.created_at_ms >= ?".to_owned());
+        conditions.push("created_at_ms >= ?".to_owned());
         values.push(SqlValue::Integer(start_at_ms));
     }
     if let Some(end_at_ms) = filter.end_at_ms {
-        conditions.push("s.created_at_ms < ?".to_owned());
+        conditions.push("created_at_ms < ?".to_owned());
         values.push(SqlValue::Integer(end_at_ms));
     }
     let where_clause = if conditions.is_empty() {
@@ -1137,8 +1127,8 @@ mod tests {
                 types: vec!["reasoning".into(), "bash".into()],
                 reason: Some("tool-calls".into()),
                 usage: usage(3.0, 30),
-                created_at_ms: 1,
-                updated_at_ms: 2,
+                created_at_ms: 5,
+                updated_at_ms: 6,
             }],
             issues: vec![ParseIssue {
                 record_type: "part".into(),
@@ -1159,6 +1149,7 @@ mod tests {
             .unwrap();
         assert_eq!(detail.turns.len(), 1);
         assert_eq!(detail.created_at_ms, 1);
+        assert_eq!(detail.turns[0].created_at_ms, 1);
         assert_eq!(detail.turns[0].types, vec!["reasoning", "bash"]);
         assert_eq!(detail.turns[0].reason.as_deref(), Some("tool-calls"));
         assert_eq!(
@@ -1313,6 +1304,139 @@ mod tests {
             })
             .unwrap();
         assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn completed_step_usage_uses_message_start_time_for_pricing() {
+        let directory = tempdir().unwrap();
+        let source = PathBuf::from("/data/opencode.db");
+        let extraction = Extraction {
+            source: source.clone(),
+            sessions: vec![session("session-1")],
+            assistant_messages: vec![AssistantMessage {
+                id: "message-1".into(),
+                session_id: "session-1".into(),
+                parent_id: None,
+                model: Model {
+                    provider_id: "openai".into(),
+                    model_id: "gpt-5".into(),
+                    variant: None,
+                },
+                usage: usage(1.0, 10),
+                text: String::new(),
+                parts: vec![],
+                created_at_ms: 10,
+                updated_at_ms: 11,
+            }],
+            steps: vec![CompletedStep {
+                id: "step-1".into(),
+                message_id: "message-1".into(),
+                session_id: "session-1".into(),
+                types: vec![],
+                reason: None,
+                usage: usage(2.0, 20),
+                created_at_ms: 20,
+                updated_at_ms: 21,
+            }],
+            ..Extraction::default()
+        };
+        let mut store = AnalyticsStore::open(directory.path().join("analytics.db")).unwrap();
+        store.import(&extraction).unwrap();
+
+        let models = store
+            .model_usage_filtered(&UsageFilter {
+                start_at_ms: Some(0),
+                end_at_ms: Some(15),
+                ..UsageFilter::default()
+            })
+            .unwrap();
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].created_at_ms, 10);
+        assert_eq!(
+            store
+                .model_usage_filtered(&UsageFilter {
+                    start_at_ms: Some(15),
+                    end_at_ms: Some(25),
+                    ..UsageFilter::default()
+                })
+                .unwrap()
+                .len(),
+            0
+        );
+    }
+
+    #[test]
+    fn session_date_filters_use_latest_session_activity() {
+        let directory = tempdir().unwrap();
+        let source = PathBuf::from("/data/opencode.db");
+        let mut selected = session("session-activity");
+        selected.created_at_ms = 10;
+        selected.updated_at_ms = 30;
+        let mut store = AnalyticsStore::open(directory.path().join("analytics.db")).unwrap();
+        store
+            .import(&Extraction {
+                source: source.clone(),
+                sessions: vec![selected],
+                ..Extraction::default()
+            })
+            .unwrap();
+
+        let filter = UsageFilter {
+            start_at_ms: Some(20),
+            end_at_ms: Some(40),
+            ..UsageFilter::default()
+        };
+        assert_eq!(store.session_usage_filtered(&filter).unwrap().len(), 1);
+        assert_eq!(store.period_usage(&filter, 10).unwrap()[0].start_at_ms, 30);
+        assert!(
+            store
+                .session_usage_filtered(&UsageFilter {
+                    start_at_ms: Some(0),
+                    end_at_ms: Some(20),
+                    ..UsageFilter::default()
+                })
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn model_usage_source_filter_keeps_duplicate_ids_separate() {
+        let directory = tempdir().unwrap();
+        let mut store = AnalyticsStore::open(directory.path().join("analytics.db")).unwrap();
+        for (source, input_tokens) in [("/data/a.db", 10), ("/data/b.db", 20)] {
+            store
+                .import(&Extraction {
+                    source: PathBuf::from(source),
+                    sessions: vec![session("same-session")],
+                    assistant_messages: vec![AssistantMessage {
+                        id: "same-message".into(),
+                        session_id: "same-session".into(),
+                        parent_id: None,
+                        model: Model {
+                            provider_id: "openai".into(),
+                            model_id: "gpt-5".into(),
+                            variant: None,
+                        },
+                        usage: usage(1.0, input_tokens),
+                        text: String::new(),
+                        parts: vec![],
+                        created_at_ms: 10,
+                        updated_at_ms: 11,
+                    }],
+                    ..Extraction::default()
+                })
+                .unwrap();
+        }
+
+        let models = store
+            .model_usage_filtered(&UsageFilter {
+                source: Some("/data/b.db".into()),
+                ..UsageFilter::default()
+            })
+            .unwrap();
+        assert_eq!(models.len(), 1);
+        assert_eq!(models[0].usage.input_tokens, 20);
     }
 
     #[test]

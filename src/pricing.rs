@@ -162,6 +162,12 @@ impl PricingCatalog {
                         model.provider, model.slug
                     )));
                 }
+                if effective_from.timestamp_subsec_nanos() % 1_000_000 != 0 {
+                    return Err(Error::PricingValidation(format!(
+                        "model {}:{} effective_from must be representable in milliseconds",
+                        model.provider, model.slug
+                    )));
+                }
                 if previous.is_some_and(|previous| effective_from <= previous) {
                     return Err(Error::PricingValidation(format!(
                         "model {}:{} price periods must be strictly ordered",
@@ -325,6 +331,24 @@ mod tests {
                 slug: "model".into(),
                 prices: vec![PricePeriod {
                     effective_from: "2026-01-01T01:00:00+01:00".into(),
+                    input: 1.0,
+                    cached_write: None,
+                    cached_read: None,
+                    output: 2.0,
+                }],
+            }],
+        };
+        assert!(catalog.validate().is_err());
+    }
+
+    #[test]
+    fn sub_millisecond_price_periods_are_rejected() {
+        let catalog = PricingCatalog {
+            models: vec![ModelPricing {
+                provider: "test".into(),
+                slug: "model".into(),
+                prices: vec![PricePeriod {
+                    effective_from: "2026-01-01T00:00:00.000001Z".into(),
                     input: 1.0,
                     cached_write: None,
                     cached_read: None,

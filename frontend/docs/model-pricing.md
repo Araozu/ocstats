@@ -8,7 +8,8 @@ leaves the UI showing incorrect costs.
 Each model has an append-only `prices` history. A period contains an
 `effective_from` RFC3339 timestamp in UTC and its per-million-token rates. The
 frontend selects the latest period whose timestamp is not after the usage
-record timestamp. A record before the first known period is left unpriced.
+record timestamp. A record before the first known period uses the earliest
+listed price as a fallback because historical provider pricing is unavailable.
 
 When the loaded catalog has no entry for a model used by the application, the dashboard sends
 `POST /api/pricing/request` with `{ "slug": "model-slug" }`. The backend records requested slugs in

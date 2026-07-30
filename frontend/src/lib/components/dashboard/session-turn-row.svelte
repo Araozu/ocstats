@@ -26,18 +26,7 @@
 	const model = $derived(turn.model);
 	function totalCost() {
 		if (!model) return null;
-		let total = 0;
-		for (const [tokens, rate] of [
-			[turn.usage.input_tokens, 'input'],
-			[turn.usage.cache_read_tokens, 'cached_read'],
-			[turn.usage.cache_write_tokens, 'cached_write'],
-			[turn.usage.output_tokens, 'output']
-		] as const) {
-			const cost = $pricingStore.cost(model, tokens, rate, turn.created_at_ms);
-			if (cost == null && tokens > 0) return null;
-			total += cost ?? 0;
-		}
-		return total;
+		return $pricingStore.usageCost(model, turn.usage, turn.created_at_ms);
 	}
 
 	function activate() {
@@ -114,6 +103,14 @@
 	>
 	<TableCell
 		><UsageCost
+			tokens={turn.usage.reasoning_tokens}
+			cost={model
+				? $pricingStore.cost(model, turn.usage.reasoning_tokens, 'reasoning', turn.created_at_ms)
+				: null}
+		/></TableCell
+	>
+	<TableCell
+		><UsageCost
 			tokens={turn.usage.output_tokens}
 			cost={model
 				? $pricingStore.cost(model, turn.usage.output_tokens, 'output', turn.created_at_ms)
@@ -142,7 +139,7 @@
 </TableRow>
 {#if detailVisible}<TableRow id={detailId} class="bg-muted/30">
 		<TableCell
-			colspan={9}
+			colspan={10}
 			class="max-w-0 whitespace-pre-wrap break-words px-5 py-3 text-xs"
 			aria-live="polite"
 		>

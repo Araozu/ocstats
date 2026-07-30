@@ -77,8 +77,10 @@ models:
 When changing a price, append a new period and keep older periods unchanged.
 The application cannot infer historical provider prices, so replace the
 initial bundled timestamps with the real effective dates when backfilling a
-catalog. Existing flat custom entries remain accepted as all-time legacy
-prices and should be migrated when historical accuracy matters.
+catalog. Usage before the first listed period uses that model's earliest
+listed price as a display and estimation fallback. Existing flat custom
+entries remain accepted as all-time legacy prices and should be migrated when
+historical accuracy matters.
 
 The login is stored in an HttpOnly, `SameSite=Strict` cookie. OC Stats should be served as one origin, and currently expects to run at the root of a hostname rather than below a URL path such as `/ocstats`.
 

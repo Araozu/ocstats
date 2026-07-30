@@ -48,7 +48,9 @@
 						? model.usage.cache_read_tokens
 						: rate === 'cached_write'
 							? model.usage.cache_write_tokens
-							: model.usage.output_tokens;
+							: rate === 'reasoning'
+								? model.usage.reasoning_tokens
+								: model.usage.output_tokens;
 			const cost = $pricingStore.cost(model, tokens, rate, model.created_at_ms);
 			if (cost == null && tokens > 0) return null;
 			total += cost ?? 0;
@@ -123,6 +125,7 @@
 					<TableHead>Input</TableHead>
 					<TableHead>Cache read</TableHead>
 					<TableHead>Cache write</TableHead>
+					<TableHead>Reasoning</TableHead>
 					<TableHead>Output</TableHead>
 					<TableHead class="pr-5 text-right">Total</TableHead>
 				</TableRow>
@@ -164,6 +167,12 @@
 								cost={modelsCost(pricingModels, 'cached_write')}
 							/></TableCell
 						>
+						<TableCell
+							><UsageCost
+								tokens={model.usage.reasoning_tokens}
+								cost={modelsCost(pricingModels, 'reasoning')}
+							/></TableCell
+						>
 						<TableCell class="pr-5"
 							><UsageCost
 								tokens={model.usage.output_tokens}
@@ -187,7 +196,7 @@
 					</TableRow>
 				{:else}
 					<TableRow>
-						<TableCell colspan={6} class="h-24 text-center text-muted-foreground">
+						<TableCell colspan={7} class="h-24 text-center text-muted-foreground">
 							No model usage records.
 						</TableCell>
 					</TableRow>
@@ -236,6 +245,20 @@
 								{formatCost(modelsCost(models, 'cached_write'))} -
 								<span title="price %" class="opacity-75">
 									{costPercentage(modelsCost(models, 'cached_write'))}
+								</span>
+							</p>
+						</TableCell>
+						<TableCell>
+							<p>
+								{formatNumber(totalUsage.reasoning_tokens)} -
+								<span title="tokens %" class="opacity-75">
+									{tokenPercentage(totalUsage.reasoning_tokens)}
+								</span>
+							</p>
+							<p class="text-[11px] text-muted-foreground">
+								{formatCost(modelsCost(models, 'reasoning'))} -
+								<span title="price %" class="opacity-75">
+									{costPercentage(modelsCost(models, 'reasoning'))}
 								</span>
 							</p>
 						</TableCell>

@@ -56,7 +56,7 @@ describe('effective model pricing', () => {
 		expect(current?.find(model, oldTimestamp)?.input).toBe(1);
 		expect(current?.find(model, newTimestamp - 1)?.input).toBe(1);
 		expect(current?.find(model, newTimestamp)?.input).toBe(3);
-		expect(current?.find(model, oldTimestamp - 1)).toBeUndefined();
+		expect(current?.find(model, oldTimestamp - 1)?.input).toBe(1);
 		unsubscribe();
 	});
 
@@ -72,6 +72,18 @@ describe('effective model pricing', () => {
 		});
 
 		expect(total).toBe(10);
+		unsubscribe();
+	});
+
+	it('charges reasoning tokens at the output rate', () => {
+		const store = createModelPricingStore();
+		store.set(pricing);
+		let total: number | null | undefined;
+		const unsubscribe = store.subscribe((snapshot) => {
+			total = snapshot.usageCost(model, usage({ reasoning_tokens: 1_000_000 }), oldTimestamp);
+		});
+
+		expect(total).toBe(2);
 		unsubscribe();
 	});
 
