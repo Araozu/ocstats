@@ -4,7 +4,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import * as Popover from '$lib/components/ui/popover';
 	import { getModelPricingContext } from '$lib/model-pricing';
-	import { formatDateTime, formatPrice } from './format';
+	import { formatPrice } from './format';
 
 	let {
 		model,
@@ -14,24 +14,19 @@
 	const pricingStore = getModelPricingContext();
 	const pricingEntries = $derived.by(() => {
 		const seen = new SvelteSet<string>();
-		const candidates = models.length ? models : model ? [model] : [];
-		return candidates.flatMap((candidate) => {
-			const key = `${candidate.provider_id}\0${candidate.model_id}`;
+		const candidates = models.length
+			? models.map((candidate) => ({ model: candidate, atMs: candidate.created_at_ms }))
+			: model && atMs !== undefined
+				? [{ model, atMs }]
+				: [];
+		return candidates.flatMap(({ model: candidate, atMs: candidateAtMs }) => {
+			const pricing = $pricingStore.find(candidate, candidateAtMs);
+			const key = `${candidate.provider_id}\0${candidate.model_id}\0${pricing?.effective_from ?? 'unknown'}`;
 			if (seen.has(key)) return [];
 			seen.add(key);
-			return [{ key, model: candidate, history: $pricingStore.history(candidate) }];
+			return [{ key, model: candidate, pricing }];
 		});
 	});
-	const pricing = $derived(
-		pricingEntries[0]
-			? atMs === undefined
-				? pricingEntries[0].history?.prices?.at(-1)
-				: $pricingStore.find(pricingEntries[0].model, atMs)
-			: undefined
-	);
-	const hasHistoricalPrices = $derived(
-		pricingEntries.some((entry) => (entry.history?.prices?.length ?? 0) > 1)
-	);
 </script>
 
 <Popover.Root>
@@ -42,52 +37,29 @@
 		<InfoIcon size={13} />
 	</Popover.Trigger>
 	<Popover.Content sideOffset={6} class="block w-48 max-w-[calc(100vw-2rem)] p-3">
-		{#if atMs === undefined && (pricingEntries.length > 1 || hasHistoricalPrices)}
-			<p class="font-medium">Historical prices per 1M tokens</p>
-			<div class="mt-2 space-y-3 text-[11px]">
-				{#each pricingEntries as entry (entry.key)}
-					<div>
+		<p class="font-medium">Price per 1M tokens</p>
+		<div class="mt-2 space-y-3 text-[11px]">
+			{#each pricingEntries as entry (entry.key)}
+				<div>
+					{#if pricingEntries.length > 1}
 						<p class="font-medium text-muted-foreground">{entry.model.provider_id}</p>
-						{#each entry.history?.prices ?? [] as period (period.effective_from)}
-							<div class="mt-2">
-								<p class="font-medium text-muted-foreground">
-									From {formatDateTime(Date.parse(period.effective_from))}
-								</p>
-								<div class="mt-1 space-y-1">
-									<div class="flex justify-between gap-4">
-										<span>Input</span><span>{formatPrice(period.input)}</span>
-									</div>
-									<div class="flex justify-between gap-4">
-										<span>Cached read</span><span>{formatPrice(period.cached_read)}</span>
-									</div>
-									<div class="flex justify-between gap-4">
-										<span>Cached write</span><span>{formatPrice(period.cached_write)}</span>
-									</div>
-									<div class="flex justify-between gap-4">
-										<span>Output</span><span>{formatPrice(period.output)}</span>
-									</div>
-								</div>
-							</div>
-						{/each}
+					{/if}
+					<div class="space-y-1">
+						<div class="flex justify-between gap-4">
+							<span>Input</span><span>{formatPrice(entry.pricing?.input)}</span>
+						</div>
+						<div class="flex justify-between gap-4">
+							<span>Cached read</span><span>{formatPrice(entry.pricing?.cached_read)}</span>
+						</div>
+						<div class="flex justify-between gap-4">
+							<span>Cached write</span><span>{formatPrice(entry.pricing?.cached_write)}</span>
+						</div>
+						<div class="flex justify-between gap-4">
+							<span>Output</span><span>{formatPrice(entry.pricing?.output)}</span>
+						</div>
 					</div>
-				{/each}
-			</div>
-		{:else}
-			<p class="font-medium">Price per 1M tokens</p>
-			<div class="mt-2 space-y-1 text-[11px]">
-				<div class="flex justify-between gap-4">
-					<span>Input</span><span>{formatPrice(pricing?.input)}</span>
 				</div>
-				<div class="flex justify-between gap-4">
-					<span>Cached read</span><span>{formatPrice(pricing?.cached_read)}</span>
-				</div>
-				<div class="flex justify-between gap-4">
-					<span>Cached write</span><span>{formatPrice(pricing?.cached_write)}</span>
-				</div>
-				<div class="flex justify-between gap-4">
-					<span>Output</span><span>{formatPrice(pricing?.output)}</span>
-				</div>
-			</div>
-		{/if}
+			{/each}
+		</div>
 	</Popover.Content>
 </Popover.Root>

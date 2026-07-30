@@ -138,10 +138,7 @@
 								<p class="min-w-0 truncate text-xs font-medium" title={model.model_id}>
 									{model.model_id}
 								</p>
-								<ModelPricingTooltip
-									models={pricingModels}
-									atMs={pricingModels.length === 1 ? pricingModels[0].created_at_ms : undefined}
-								/>
+								<ModelPricingTooltip models={pricingModels} />
 							</div>
 							<p class="truncate text-[11px] text-muted-foreground">
 								{grouping === 'provider'
