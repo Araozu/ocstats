@@ -24,7 +24,7 @@
 						: kind === 'cached_write'
 							? 'cached_write'
 							: 'output';
-			const cost = $pricingStore.cost(model, tokens, rate);
+			const cost = $pricingStore.cost(model, tokens, rate, model.created_at_ms);
 			if (cost == null) return null;
 			total += cost;
 		}

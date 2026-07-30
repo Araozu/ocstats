@@ -1,193 +1,254 @@
 # Standard paid API prices in USD per 1,000,000 tokens.
 # null means the provider does not publish that cache operation for the model.
+# Price periods are append-only and effective_from timestamps are UTC.
 models:
   # OpenAI: newest text API models
   - provider: openai
     slug: gpt-5.5
-    input: 5.0
-    cached_write: null
-    cached_read: 0.5
-    output: 30.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 5.0
+        cached_write: null
+        cached_read: 0.5
+        output: 30.0
   - provider: openai
     slug: gpt-5.5-pro
-    input: 30.0
-    cached_write: null
-    cached_read: null
-    output: 180.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 30.0
+        cached_write: null
+        cached_read: null
+        output: 180.0
   - provider: openai
     slug: gpt-5.4
-    input: 2.5
-    cached_write: null
-    cached_read: 0.25
-    output: 15.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 2.5
+        cached_write: null
+        cached_read: 0.25
+        output: 15.0
   - provider: openai
     slug: gpt-5.4-pro
-    input: 30.0
-    cached_write: null
-    cached_read: null
-    output: 180.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 30.0
+        cached_write: null
+        cached_read: null
+        output: 180.0
   - provider: openai
     slug: gpt-5.3-codex
-    input: 1.75
-    cached_write: null
-    cached_read: 0.175
-    output: 14.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 1.75
+        cached_write: null
+        cached_read: 0.175
+        output: 14.0
   - provider: openai
     slug: gpt-5.6-luna
-    input: 1.0
-    cached_write: 1.25
-    cached_read: 0.1
-    output: 6.0
+    prices:
+      - effective_from: "2026-07-10T03:44:55Z"
+        input: 1.0
+        cached_write: 1.25
+        cached_read: 0.1
+        output: 6.0
   - provider: openai
     slug: gpt-5.6-sol
-    input: 5.0
-    cached_write: 6.25
-    cached_read: 0.5
-    output: 30.0
+    prices:
+      - effective_from: "2026-07-10T03:44:55Z"
+        input: 5.0
+        cached_write: 6.25
+        cached_read: 0.5
+        output: 30.0
   - provider: openai
     slug: gpt-5.6-terra
-    input: 2.5
-    cached_write: 3.125
-    cached_read: 0.25
-    output: 15.0
+    prices:
+      - effective_from: "2026-07-10T03:44:55Z"
+        input: 2.5
+        cached_write: 3.125
+        cached_read: 0.25
+        output: 15.0
 
   # Anthropic: newest Claude API models
   - provider: anthropic
     slug: claude-fable-5
-    input: 10.0
-    cached_write: 12.5
-    cached_read: 1.0
-    output: 50.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 10.0
+        cached_write: 12.5
+        cached_read: 1.0
+        output: 50.0
   - provider: anthropic
     slug: claude-mythos-5
-    input: 10.0
-    cached_write: 12.5
-    cached_read: 1.0
-    output: 50.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 10.0
+        cached_write: 12.5
+        cached_read: 1.0
+        output: 50.0
   - provider: anthropic
     slug: claude-opus-4-8
-    input: 5.0
-    cached_write: 6.25
-    cached_read: 0.5
-    output: 25.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 5.0
+        cached_write: 6.25
+        cached_read: 0.5
+        output: 25.0
   - provider: anthropic
     slug: claude-opus-4-7
-    input: 5.0
-    cached_write: 6.25
-    cached_read: 0.5
-    output: 25.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 5.0
+        cached_write: 6.25
+        cached_read: 0.5
+        output: 25.0
   - provider: anthropic
     slug: claude-opus-4-6
-    input: 5.0
-    cached_write: 6.25
-    cached_read: 0.5
-    output: 25.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 5.0
+        cached_write: 6.25
+        cached_read: 0.5
+        output: 25.0
   - provider: anthropic
     slug: claude-opus-4.6
-    input: 5.0
-    cached_write: 6.25
-    cached_read: 0.5
-    output: 25.0
+    prices:
+      - effective_from: "2026-07-10T03:44:55Z"
+        input: 5.0
+        cached_write: 6.25
+        cached_read: 0.5
+        output: 25.0
   - provider: anthropic
     slug: claude-sonnet-4.6
-    input: 3.0
-    cached_write: 3.75
-    cached_read: 0.3
-    output: 15.0
+    prices:
+      - effective_from: "2026-07-10T03:44:55Z"
+        input: 3.0
+        cached_write: 3.75
+        cached_read: 0.3
+        output: 15.0
   - provider: anthropic
     slug: claude-sonnet-4-6
-    input: 3.0
-    cached_write: 3.75
-    cached_read: 0.3
-    output: 15.0
+    prices:
+      - effective_from: "2026-07-10T04:04:00Z"
+        input: 3.0
+        cached_write: 3.75
+        cached_read: 0.3
+        output: 15.0
 
   # Google: newest text-capable Gemini API models
   - provider: google
     slug: gemini-3.5-flash
-    input: 1.5
-    cached_write: null
-    cached_read: 0.15
-    output: 9.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 1.5
+        cached_write: null
+        cached_read: 0.15
+        output: 9.0
   - provider: google
     slug: gemini-3.1-pro-preview
-    input: 2.0
-    cached_write: null
-    cached_read: 0.2
-    output: 12.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 2.0
+        cached_write: null
+        cached_read: 0.2
+        output: 12.0
   - provider: google
     slug: gemini-3.1-flash-lite
-    input: 0.25
-    cached_write: null
-    cached_read: 0.025
-    output: 1.5
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 0.25
+        cached_write: null
+        cached_read: 0.025
+        output: 1.5
   - provider: google
     slug: gemini-3-flash-preview
-    input: 0.5
-    cached_write: null
-    cached_read: 0.05
-    output: 3.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 0.5
+        cached_write: null
+        cached_read: 0.05
+        output: 3.0
   - provider: google
     slug: gemini-3-flash
-    input: 0.5
-    cached_write: null
-    cached_read: 0.05
-    output: 3.0
+    prices:
+      - effective_from: "2026-07-10T03:44:55Z"
+        input: 0.5
+        cached_write: null
+        cached_read: 0.05
+        output: 3.0
   - provider: google
     slug: gemini-2.5-pro
-    input: 1.25
-    cached_write: null
-    cached_read: 0.125
-    output: 10.0
+    prices:
+      - effective_from: "2026-07-10T00:23:34Z"
+        input: 1.25
+        cached_write: null
+        cached_read: 0.125
+        output: 10.0
   - provider: google
     slug: gemini-3-pro
-    input: 2.0
-    cached_write: null
-    cached_read: 0.2
-    output: 12.0
+    prices:
+      - effective_from: "2026-07-10T04:04:00Z"
+        input: 2.0
+        cached_write: null
+        cached_read: 0.2
+        output: 12.0
 
   # Moonshot: Kimi API models
   - provider: moonshot
     slug: kimi-k2.6
-    input: 0.95
-    cached_write: null
-    cached_read: 0.16
-    output: 4.0
+    prices:
+      - effective_from: "2026-07-10T03:44:55Z"
+        input: 0.95
+        cached_write: null
+        cached_read: 0.16
+        output: 4.0
   - provider: moonshot
     slug: k2p6
-    input: 0.95
-    cached_write: null
-    cached_read: 0.16
-    output: 4.0
+    prices:
+      - effective_from: "2026-07-20T14:44:34Z"
+        input: 0.95
+        cached_write: null
+        cached_read: 0.16
+        output: 4.0
   - provider: moonshot
     slug: k2p7
-    input: 0.95
-    cached_write: null
-    cached_read: 0.16
-    output: 4.0
+    prices:
+      - effective_from: "2026-07-10T04:04:00Z"
+        input: 0.95
+        cached_write: null
+        cached_read: 0.16
+        output: 4.0
   - provider: moonshot
     slug: kimi-k2.5
-    input: 0.6
-    cached_write: null
-    cached_read: 0.15
-    output: 3.0
+    prices:
+      - effective_from: "2026-07-10T04:04:00Z"
+        input: 0.6
+        cached_write: null
+        cached_read: 0.15
+        output: 3.0
 
   # MiniMax: standard paid API prices
   - provider: minimax
     slug: minimax-m2.5-free
-    input: 0.3
-    cached_write: 0.375
-    cached_read: 0.03
-    output: 1.2
+    prices:
+      - effective_from: "2026-07-10T03:44:55Z"
+        input: 0.3
+        cached_write: 0.375
+        cached_read: 0.03
+        output: 1.2
   - provider: minimax
     slug: minimax-m2.7
-    input: 0.3
-    cached_write: 0.375
-    cached_read: 0.06
-    output: 1.2
+    prices:
+      - effective_from: "2026-07-10T04:04:00Z"
+        input: 0.3
+        cached_write: 0.375
+        cached_read: 0.06
+        output: 1.2
 
   - provider: xiaomi
     slug: mimo-v2.5-free
-    input: 0.14
-    cached_write: null
-    cached_read: 0.002
-    output: 0.28
+    prices:
+      - effective_from: "2026-07-20T14:44:34Z"
+        input: 0.14
+        cached_write: null
+        cached_read: 0.002
+        output: 0.28

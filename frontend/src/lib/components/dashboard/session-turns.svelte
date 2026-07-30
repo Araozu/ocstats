@@ -32,7 +32,7 @@
 			[turn.usage.cache_write_tokens, 'cached_write'],
 			[turn.usage.output_tokens, 'output']
 		] as const) {
-			const cost = $pricingStore.cost(turn.model, tokens, rate);
+			const cost = $pricingStore.cost(turn.model, tokens, rate, turn.created_at_ms);
 			if (cost == null && tokens > 0) return null;
 			total += cost ?? 0;
 		}

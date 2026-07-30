@@ -8,7 +8,7 @@ pub use analytics::{
     AnalyticsStore, ImportSummary, ModelSummary, ModelUsage, PeriodUsage, ProjectSummary,
     Reconciliation, SessionDetail, SessionUsage, Turn, TurnText, UsageFilter,
 };
-pub use pricing::{ModelPricing, PricingCatalog};
+pub use pricing::{ModelPricing, PricePeriod, PricingCatalog};
 pub use server::serve_default;
 
 use std::{
@@ -74,6 +74,8 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("could not parse pricing file: {0}")]
     PricingParse(#[from] serde_yaml::Error),
+    #[error("invalid pricing catalog: {0}")]
+    PricingValidation(String),
     #[error("token count exceeds SQLite's signed integer range: {0}")]
     TokenCount(u64),
     #[error("aggregation period must be greater than zero")]

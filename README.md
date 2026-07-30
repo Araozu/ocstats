@@ -53,6 +53,33 @@ services:
       - ./pricing.yaml:/config/pricing.yaml:ro
 ```
 
+Pricing entries contain an append-only `prices` history. Each period uses an
+`effective_from` RFC3339 timestamp in UTC, and the latest period at or before a
+usage record's timestamp is used. For example:
+
+```yaml
+models:
+  - provider: openai
+    slug: gpt-5.5
+    prices:
+      - effective_from: "2026-01-01T00:00:00Z"
+        input: 5.0
+        cached_write: null
+        cached_read: 0.5
+        output: 30.0
+      - effective_from: "2026-07-30T12:30:00Z"
+        input: 2.5
+        cached_write: null
+        cached_read: 0.25
+        output: 15.0
+```
+
+When changing a price, append a new period and keep older periods unchanged.
+The application cannot infer historical provider prices, so replace the
+initial bundled timestamps with the real effective dates when backfilling a
+catalog. Existing flat custom entries remain accepted as all-time legacy
+prices and should be migrated when historical accuracy matters.
+
 The login is stored in an HttpOnly, `SameSite=Strict` cookie. OC Stats should be served as one origin, and currently expects to run at the root of a hostname rather than below a URL path such as `/ocstats`.
 
 ## Storage

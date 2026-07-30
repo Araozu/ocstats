@@ -5,6 +5,11 @@ request succeeds, so any lookup or cost derived from pricing must remain reactiv
 matched model, or total once during component initialization captures the initial empty catalog and
 leaves the UI showing incorrect costs.
 
+Each model has an append-only `prices` history. A period contains an
+`effective_from` RFC3339 timestamp in UTC and its per-million-token rates. The
+frontend selects the latest period whose timestamp is not after the usage
+record timestamp. A record before the first known period is left unpriced.
+
 When the loaded catalog has no entry for a model used by the application, the dashboard sends
 `POST /api/pricing/request` with `{ "slug": "model-slug" }`. The backend records requested slugs in
 `pricing-requests.txt` in its execution directory, one slug per line, and keeps the file
@@ -27,6 +32,7 @@ $effect(() => modelPricing.set(pricing));
 - rebuilding lookup indexes when the query result changes;
 - matching `provider_id + model_id` against catalog `provider + slug`;
 - falling back to slug-only matching for usage sources whose provider differs;
+- selecting the effective price period for a usage timestamp;
 - calculating per-token costs from prices expressed per one million tokens.
 
 Descendant components consume the store with `getModelPricingContext()`. Reading it with Svelte's
@@ -43,25 +49,27 @@ component-local pricing maps.
 	let { model } = $props();
 	const pricingStore = getModelPricingContext();
 
-	const pricing = $derived($pricingStore.find(model));
-	const inputCost = $derived($pricingStore.cost(model, model.usage.input_tokens, 'input'));
+	const pricing = $derived($pricingStore.find(model, model.created_at_ms));
+	const inputCost = $derived(
+		$pricingStore.cost(model, model.usage.input_tokens, 'input', model.created_at_ms)
+	);
 </script>
 ```
 
 Calls made directly from reactive template expressions also track the store correctly. For lists,
-derive rows from both the usage models and `$pricingStore.find(model)`, as `model-usage-card.svelte`
-does.
+derive rows from both the usage models and `$pricingStore.find(model, timestamp)`, as
+`model-usage-card.svelte` does.
 
-Session lists follow the same rule. The session usage response includes its model usage records, so
-the second sidebar derives each session's cost from `$pricingStore.totalCost()` rather than reading the
-raw session cost. If any model or rate is unavailable, the sidebar displays `—` until pricing is
-available (or when the catalog has no matching price).
+Session lists follow the same rule. The session usage response includes timestamped model usage
+records, so the second sidebar derives each session's cost from `$pricingStore.totalCost()` rather than
+reading the raw session cost. If any model or rate is unavailable, the sidebar displays `—` until
+pricing is available (or when the catalog has no matching price).
 
 The session table and total-cost metric in the overview use the same reactive session/model totals.
 
-The store snapshot returns `undefined` for an unmatched model and `null` when a cost cannot be
-calculated. Callers must preserve that distinction until display time instead of substituting a
-price of zero.
+The store snapshot returns `undefined` for an unmatched model or unpriced timestamp and `null` when a
+cost cannot be calculated. Callers must preserve that distinction until display time instead of
+substituting a price of zero.
 
 ## Avoiding regressions
 
@@ -77,8 +85,8 @@ When adding a new pricing consumer:
 
 1. Call `getModelPricingContext()` during component initialization.
 2. Read the returned store with `$pricingStore` inside templates or `$derived` expressions.
-3. Use `$pricingStore.find()` for displaying catalog rates.
-4. Use `$pricingStore.cost()` for monetary calculations.
+3. Use `$pricingStore.find(model, timestamp)` for displaying catalog rates.
+4. Use `$pricingStore.cost(model, tokens, rate, timestamp)` for monetary calculations.
 5. Put aggregates that call the store in `$derived` expressions.
 6. Verify the UI once before pricing resolves and again after it resolves.
 

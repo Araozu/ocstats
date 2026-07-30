@@ -79,7 +79,11 @@
 		projects.find((project) => projectKey(project) === selectedProjectKey) ?? null
 	);
 	const modelUsageQuery = createQuery(() =>
-		usageQueries.modelUsage(selectedProject?.id ?? null, authenticated)
+		usageQueries.modelUsage(
+			selectedProject?.id ?? null,
+			selectedProject?.source ?? null,
+			authenticated
+		)
 	);
 	let password = $state('');
 	let loginError = $state<string | null>(null);

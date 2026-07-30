@@ -14,10 +14,10 @@ export const usageQueries = {
 		queryOptions({ queryKey: ['projects'], queryFn: getProjects, enabled }),
 	sessions: (enabled: boolean) =>
 		queryOptions({ queryKey: ['sessions'], queryFn: getSessions, enabled }),
-	modelUsage: (projectId: string | null, enabled: boolean) =>
+	modelUsage: (projectId: string | null, source: string | null, enabled: boolean) =>
 		queryOptions({
-			queryKey: ['model-usage', projectId],
-			queryFn: () => getModelUsage(projectId ?? undefined),
+			queryKey: ['model-usage', source, projectId],
+			queryFn: () => getModelUsage(projectId ?? undefined, source ?? undefined),
 			enabled
 		}),
 	models: (enabled: boolean) => queryOptions({ queryKey: ['models'], queryFn: getModels, enabled }),

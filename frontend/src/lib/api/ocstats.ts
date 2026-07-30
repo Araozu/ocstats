@@ -25,7 +25,7 @@ export type SessionUsage = {
 };
 
 export type Model = { provider_id: string; model_id: string; variant: string | null };
-export type ModelUsage = Model & { usage: Usage };
+export type ModelUsage = Model & { created_at_ms: number; usage: Usage };
 export type Turn = {
 	id: string;
 	message_id: string;
@@ -45,13 +45,21 @@ export type TurnOutputPart = {
 };
 export type TurnText = { turn_id: string; message_id: string; parts: TurnOutputPart[] | null };
 export type SessionDetail = SessionUsage & { models: ModelUsage[]; turns: Turn[] };
-export type ModelPricing = {
-	provider: string;
-	slug: string;
+export type PricePeriod = {
+	effective_from: string;
 	input: number;
 	cached_write: number | null;
 	cached_read: number | null;
 	output: number;
+};
+export type ModelPricing = {
+	provider: string;
+	slug: string;
+	input?: number;
+	cached_write?: number | null;
+	cached_read?: number | null;
+	output?: number;
+	prices?: PricePeriod[];
 };
 export type PricingCatalog = { models: ModelPricing[] };
 export type AuthStatus = { authenticated: boolean };
@@ -70,10 +78,13 @@ async function get<T>(path: string): Promise<T> {
 
 export const getProjects = () => get<Project[]>('/projects');
 export const getSessions = () => get<SessionUsage[]>('/usage/sessions');
-export const getModelUsage = (projectId?: string) =>
-	get<ModelUsage[]>(
-		`/usage/models${projectId ? `?project_id=${encodeURIComponent(projectId)}` : ''}`
-	);
+export const getModelUsage = (projectId?: string, source?: string) => {
+	const params = new URLSearchParams();
+	if (projectId) params.set('project_id', projectId);
+	if (source) params.set('source', source);
+	const query = params.toString();
+	return get<ModelUsage[]>(`/usage/models${query ? `?${query}` : ''}`);
+};
 export const getModels = () => get<Model[]>('/models');
 export const getPricing = () => get<PricingCatalog>('/pricing');
 export const getAuthStatus = () => get<AuthStatus>('/auth/status');

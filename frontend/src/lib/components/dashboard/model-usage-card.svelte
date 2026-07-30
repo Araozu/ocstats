@@ -49,7 +49,7 @@
 						: rate === 'cached_write'
 							? model.usage.cache_write_tokens
 							: model.usage.output_tokens;
-			const cost = $pricingStore.cost(model, tokens, rate);
+			const cost = $pricingStore.cost(model, tokens, rate, model.created_at_ms);
 			if (cost == null && tokens > 0) return null;
 			total += cost ?? 0;
 		}
@@ -74,18 +74,18 @@
 	}
 
 	const modelRows = $derived.by(() => {
-		if (grouping === 'provider') {
-			return models.map((model) => ({ model, pricingModels: [model] }));
-		}
-
 		const grouped = new SvelteMap<string, { model: ModelUsage; pricingModels: ModelUsage[] }>();
 		for (const model of models) {
-			const existing = grouped.get(model.model_id);
+			const key =
+				grouping === 'provider'
+					? `${model.provider_id}\0${model.model_id}\0${model.variant ?? ''}`
+					: model.model_id;
+			const existing = grouped.get(key);
 			if (existing) {
 				existing.model = { ...existing.model, usage: addUsage(existing.model.usage, model.usage) };
 				existing.pricingModels.push(model);
 			} else {
-				grouped.set(model.model_id, { model: { ...model }, pricingModels: [model] });
+				grouped.set(key, { model: { ...model }, pricingModels: [model] });
 			}
 		}
 		return [...grouped.values()];
@@ -94,7 +94,8 @@
 	$effect(() => {
 		if (!$pricingStore.loaded) return;
 		for (const model of models) {
-			if ($pricingStore.find(model) || requestedPricing.has(model.model_id)) continue;
+			if (model.provider_id === 'unknown' || model.model_id === 'unknown') continue;
+			if ($pricingStore.history(model) || requestedPricing.has(model.model_id)) continue;
 			requestedPricing.add(model.model_id);
 			void requestPricing(model.model_id).catch(() => {
 				requestedPricing.delete(model.model_id);
@@ -135,7 +136,8 @@
 									{model.model_id}
 								</p>
 								<ModelPricingTooltip
-									model={pricingModels.length === 1 ? pricingModels[0] : undefined}
+									models={pricingModels}
+									atMs={pricingModels.length === 1 ? pricingModels[0].created_at_ms : undefined}
 								/>
 							</div>
 							<p class="truncate text-[11px] text-muted-foreground">

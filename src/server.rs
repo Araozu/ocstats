@@ -480,7 +480,10 @@ fn api_error(error: Error) -> ApiError {
 
 #[cfg(test)]
 mod tests {
-    use axum::{body::Body, http::Request};
+    use axum::{
+        body::{Body, to_bytes},
+        http::Request,
+    };
     use tower::ServiceExt;
 
     use super::*;
@@ -599,10 +602,13 @@ mod tests {
                 models: vec![crate::ModelPricing {
                     provider: "test".into(),
                     slug: "test-model".into(),
-                    input: 1.0,
-                    cached_write: None,
-                    cached_read: Some(0.1),
-                    output: 2.0,
+                    prices: vec![crate::PricePeriod {
+                        effective_from: "2026-01-01T00:00:00Z".into(),
+                        input: 1.0,
+                        cached_write: None,
+                        cached_read: Some(0.1),
+                        output: 2.0,
+                    }],
                 }],
             },
             crate::pricing::PricingRequests::new(directory.path().join("pricing-requests.txt")),
@@ -629,6 +635,10 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(response.status(), StatusCode::OK);
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
+        assert_eq!(json["models"][0]["input"], 1.0);
+        assert_eq!(json["models"][0]["prices"][0]["input"], 1.0);
     }
 
     #[tokio::test]

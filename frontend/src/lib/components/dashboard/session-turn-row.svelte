@@ -33,7 +33,7 @@
 			[turn.usage.cache_write_tokens, 'cached_write'],
 			[turn.usage.output_tokens, 'output']
 		] as const) {
-			const cost = $pricingStore.cost(model, tokens, rate);
+			const cost = $pricingStore.cost(model, tokens, rate, turn.created_at_ms);
 			if (cost == null && tokens > 0) return null;
 			total += cost ?? 0;
 		}
@@ -68,7 +68,7 @@
 	<TableCell class="w-44 max-w-44">
 		{#if model}<div class="flex min-w-0 items-center gap-1.5">
 				<p class="min-w-0 truncate text-xs font-medium" title={model.model_id}>{model.model_id}</p>
-				<ModelPricingTooltip {model} />
+				<ModelPricingTooltip {model} atMs={turn.created_at_ms} />
 			</div>
 			<p class="truncate text-[11px] text-muted-foreground">
 				{model.provider_id}{model.variant ? ` · ${model.variant}` : ''}
@@ -86,25 +86,38 @@
 	<TableCell
 		><UsageCost
 			tokens={turn.usage.input_tokens}
-			cost={model ? $pricingStore.cost(model, turn.usage.input_tokens, 'input') : null}
+			cost={model
+				? $pricingStore.cost(model, turn.usage.input_tokens, 'input', turn.created_at_ms)
+				: null}
 		/></TableCell
 	>
 	<TableCell class="hidden sm:table-cell"
 		><UsageCost
 			tokens={turn.usage.cache_read_tokens}
-			cost={model ? $pricingStore.cost(model, turn.usage.cache_read_tokens, 'cached_read') : null}
+			cost={model
+				? $pricingStore.cost(model, turn.usage.cache_read_tokens, 'cached_read', turn.created_at_ms)
+				: null}
 		/></TableCell
 	>
 	<TableCell class="hidden sm:table-cell"
 		><UsageCost
 			tokens={turn.usage.cache_write_tokens}
-			cost={model ? $pricingStore.cost(model, turn.usage.cache_write_tokens, 'cached_write') : null}
+			cost={model
+				? $pricingStore.cost(
+						model,
+						turn.usage.cache_write_tokens,
+						'cached_write',
+						turn.created_at_ms
+					)
+				: null}
 		/></TableCell
 	>
 	<TableCell
 		><UsageCost
 			tokens={turn.usage.output_tokens}
-			cost={model ? $pricingStore.cost(model, turn.usage.output_tokens, 'output') : null}
+			cost={model
+				? $pricingStore.cost(model, turn.usage.output_tokens, 'output', turn.created_at_ms)
+				: null}
 		/></TableCell
 	>
 	<TableCell class="pr-5 text-right text-xs font-medium">{formatCost(totalCost())}</TableCell>
