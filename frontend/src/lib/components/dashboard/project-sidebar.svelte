@@ -12,6 +12,7 @@
 	import { Badge } from '$lib/components/ui/badge';
 	import { Button, buttonVariants } from '$lib/components/ui/button';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu';
+	import ThemePicker from './theme-picker.svelte';
 	import { resetMode, setMode } from 'mode-watcher';
 	import { projectKey, projectLabel, type ProjectSortMode } from './format';
 
@@ -148,11 +149,11 @@
 				<DropdownMenu.Root>
 					<DropdownMenu.Trigger
 						class={buttonVariants({ variant: 'outline', size: 'icon' })}
-						aria-label="Change color theme"
+						aria-label="Change light or dark mode"
 					>
 						<SunIcon class="dark:hidden" />
 						<MoonIcon class="hidden dark:block" />
-						<span class="sr-only">Change color theme</span>
+						<span class="sr-only">Change light or dark mode</span>
 					</DropdownMenu.Trigger>
 					<DropdownMenu.Content align="end">
 						<DropdownMenu.Item onclick={() => setMode('light')}><SunIcon /> Light</DropdownMenu.Item
@@ -161,6 +162,7 @@
 						<DropdownMenu.Item onclick={resetMode}><MonitorIcon /> System</DropdownMenu.Item>
 					</DropdownMenu.Content>
 				</DropdownMenu.Root>
+				<ThemePicker />
 			</div>
 		</div>
 	</div>

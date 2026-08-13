@@ -20,6 +20,7 @@
 	import { SvelteSet } from 'svelte/reactivity';
 	import { projectKey, projectLabel, type ProjectSortMode } from './format';
 	import SessionTree from './session-tree.svelte';
+	import ThemePicker from './theme-picker.svelte';
 
 	let {
 		projects,
@@ -236,7 +237,7 @@
 	<DropdownMenu.Root>
 		<DropdownMenu.Trigger
 			class={buttonVariants({ variant: 'outline', size: 'icon-lg', class: 'size-9' })}
-			aria-label="Change color theme"
+			aria-label="Change light or dark mode"
 		>
 			<SunIcon class="dark:hidden" />
 			<MoonIcon class="hidden dark:block" />
@@ -247,4 +248,5 @@
 			<DropdownMenu.Item onclick={resetMode}><MonitorIcon /> System</DropdownMenu.Item>
 		</DropdownMenu.Content>
 	</DropdownMenu.Root>
+	<ThemePicker />
 </header>
